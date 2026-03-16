@@ -796,6 +796,7 @@ async def lire_tags(nom_fichier: str):
         "total_pistes": total_pistes,
         "commentaire":  commentaire,
         "cover_base64": cover_b64,
+        "type_sortie":  str(tags["TXXX:release_type"].text[0]) if tags.get("TXXX:release_type") else "album",
     }
 
 
@@ -814,11 +815,12 @@ async def ecrire_tags(
     piste:        str | None = Form(None),
     total_pistes: str | None = Form(None),
     commentaire:  str | None = Form(None),
+    type_sortie:  str | None = Form(None),   # 'album' | 'ep' | 'single'
     cover:        UploadFile | None = None,
 ):
     from mutagen.id3 import (
         ID3, ID3NoHeaderError,
-        TIT2, TPE1, TALB, TDRC, TCON, TRCK, COMM, APIC,
+        TIT2, TPE1, TALB, TDRC, TCON, TRCK, COMM, APIC, TXXX,
         Encoding,
     )
 
@@ -851,6 +853,13 @@ async def ecrire_tags(
             lang="fra",
             desc="",
             text=[commentaire],
+        )
+
+    if type_sortie and type_sortie.lower() in ("album", "ep", "single"):
+        tags["TXXX:release_type"] = TXXX(
+            encoding=Encoding.UTF8,
+            desc="release_type",
+            text=[type_sortie.lower()],
         )
 
     if cover is not None and cover.filename:

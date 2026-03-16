@@ -140,6 +140,17 @@
 
   .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
+  /* ── TYPE SORTIE ── */
+  .type-btn {
+    display: flex; flex-direction: column; align-items: center; gap: 5px;
+    padding: 10px 6px; border-radius: var(--radius-sm); border: 1px solid var(--border);
+    cursor: pointer; transition: all .15s; background: var(--bg3); font-size: .72rem; font-weight: 600;
+  }
+  .type-btn:hover { border-color: var(--accent2); }
+  .type-btn.active { border-color: var(--accent2); background: rgba(124,58,237,.15); color: var(--accent2); }
+  .type-btn .type-icon { font-size: 1.3rem; }
+  .type-btn .type-label { text-transform: uppercase; letter-spacing: .05em; }
+
   .save-section { display: flex; flex-direction: column; gap: 8px; margin-top: auto; padding-top: 8px; }
   .save-info { font-size: .75rem; color: var(--text3); text-align: center; line-height: 1.5; }
 
@@ -217,7 +228,30 @@
 
   <!-- ── COLONNE DROITE : infos album ── -->
   <div class="col-album">
-    <div class="col-title" style="margin-bottom:-8px">Informations de l'album</div>
+    <div class="col-title" style="margin-bottom:-8px" id="colAlbumTitle">Informations de la sortie</div>
+
+    <!-- Type de sortie -->
+    <div class="field-group">
+      <label class="field-label">Type de sortie</label>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px" id="typeSortie">
+        <label class="type-btn active" data-type="album">
+          <input type="radio" name="type" value="album" checked style="display:none">
+          <span class="type-icon">💿</span>
+          <span class="type-label">Album</span>
+        </label>
+        <label class="type-btn" data-type="ep">
+          <input type="radio" name="type" value="ep" style="display:none">
+          <span class="type-icon">📀</span>
+          <span class="type-label">EP</span>
+        </label>
+        <label class="type-btn" data-type="single">
+          <input type="radio" name="type" value="single" style="display:none">
+          <span class="type-icon">🎵</span>
+          <span class="type-label">Single</span>
+        </label>
+      </div>
+      <div id="typeHint" style="font-size:.72rem;color:var(--text3);margin-top:4px">7+ pistes recommandées</div>
+    </div>
 
     <!-- Cover -->
     <div>
@@ -235,9 +269,9 @@
       <input type="file" id="coverInput" accept="image/*" style="display:none" onchange="previewCover(this)">
     </div>
 
-    <!-- Nom album -->
+    <!-- Nom sortie -->
     <div class="field-group">
-      <label class="field-label">Nom de l'album</label>
+      <label class="field-label" id="labelNom">Nom de l'album</label>
       <input class="field-input" type="text" id="albumNom" placeholder="Mon album…">
     </div>
 
@@ -286,7 +320,7 @@
       <div class="save-info" id="saveInfo">Ajoutez des pistes pour pouvoir enregistrer</div>
       <button class="btn btn-primary" id="btnSave" onclick="enregistrerAlbum()" disabled>
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-        Enregistrer l'album
+        <span id="btnSaveLabel">Enregistrer</span>
       </button>
     </div>
   </div>
@@ -297,9 +331,34 @@
 
 <script>
 const API = '';
-let tousLesMp3 = [];   // [{nom, taille, cover_url}]
-let tracklist  = [];   // [{nom, titre, artiste, annee, genre, cover_url}]
+let tousLesMp3 = [];
+let tracklist  = [];
 let dragSrcIdx = null;
+
+const TYPE_CONFIG = {
+  album:  { label: 'Album',  nom: "Nom de l'album",  hint: '7+ pistes recommandées', max: Infinity, icon: '💿' },
+  ep:     { label: 'EP',     nom: "Nom de l'EP",     hint: '3 à 6 pistes recommandées', max: Infinity, icon: '📀' },
+  single: { label: 'Single', nom: 'Titre du single', hint: '1 à 3 pistes maximum', max: 3, icon: '🎵' },
+};
+
+function typeCourant() {
+  return document.querySelector('input[name="type"]:checked')?.value || 'album';
+}
+
+// Gestion des boutons de type
+document.querySelectorAll('.type-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    btn.querySelector('input').checked = true;
+    const cfg = TYPE_CONFIG[btn.dataset.type];
+    document.getElementById('labelNom').textContent    = cfg.nom;
+    document.getElementById('albumNom').placeholder    = cfg.nom + '…';
+    document.getElementById('typeHint').textContent    = cfg.hint;
+    document.getElementById('btnSaveLabel').textContent = `Enregistrer le ${cfg.label}`;
+    mettreAJourBouton();
+  });
+});
 
 // ── UTILS ──────────────────────────────────────────────────────────────────
 
@@ -497,13 +556,25 @@ function previewCover(input) {
 // ── MISE À JOUR BOUTON ──────────────────────────────────────────────────────
 
 function mettreAJourBouton() {
-  const ok = tracklist.length > 0 && document.getElementById('albumNom').value.trim();
+  const type = typeCourant();
+  const cfg  = TYPE_CONFIG[type];
+  const nom  = document.getElementById('albumNom').value.trim();
+  const n    = tracklist.length;
+  const ok   = n > 0 && nom;
+
+  // Avertissement Single > 3 pistes
+  const depasse = type === 'single' && n > cfg.max;
+  document.getElementById('typeHint').textContent = depasse
+    ? `⚠️ Un single dépasse rarement ${cfg.max} pistes`
+    : cfg.hint;
+  document.getElementById('typeHint').style.color = depasse ? 'var(--yellow)' : 'var(--text3)';
+
   document.getElementById('btnSave').disabled = !ok;
-  document.getElementById('saveInfo').textContent = !tracklist.length
+  document.getElementById('saveInfo').textContent = !n
     ? 'Ajoutez des pistes pour pouvoir enregistrer'
-    : !document.getElementById('albumNom').value.trim()
-    ? 'Saisissez le nom de l\'album'
-    : `${tracklist.length} piste(s) prête(s) à enregistrer`;
+    : !nom
+    ? `Saisissez le ${cfg.label === 'Single' ? 'titre du single' : 'nom du ' + cfg.label.toLowerCase()}`
+    : `${n} piste${n > 1 ? 's' : ''} — ${cfg.label} prêt(e) à enregistrer`;
 }
 
 document.getElementById('albumNom').addEventListener('input', mettreAJourBouton);
@@ -520,6 +591,7 @@ async function enregistrerAlbum() {
   const appArtiste = document.getElementById('optArtiste').checked;
   const coverFile  = document.getElementById('coverInput').files[0];
   const total      = tracklist.length;
+  const type       = typeCourant();   // 'album' | 'ep' | 'single'
 
   if (!nomAlbum || !total) return;
 
@@ -539,6 +611,7 @@ async function enregistrerAlbum() {
     try {
       const fd = new FormData();
       fd.append('album', nomAlbum);
+      fd.append('type_sortie', type);
       if (appArtiste && artiste) fd.append('artiste', artiste);
       if (annee) fd.append('annee', annee);
       if (genre) fd.append('genre', genre);
@@ -560,7 +633,8 @@ async function enregistrerAlbum() {
   fill.style.width = '100%';
   lbl.textContent = `Terminé : ${ok} mise(s) à jour${err ? `, ${err} erreur(s)` : ''}`;
 
-  if (err === 0) toast(`Album "${nomAlbum}" enregistré — ${ok} pistes mises à jour ✓`, 'success', 5000);
+  const cfg = TYPE_CONFIG[type];
+  if (err === 0) toast(`${cfg.label} "${nomAlbum}" enregistré — ${ok} piste${ok>1?'s':''} ✓`, 'success', 5000);
   else toast(`${ok} ok, ${err} erreur(s)`, 'error', 5000);
 
   document.getElementById('btnSave').disabled = false;
