@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sonauto Downloader</title>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --bg2: #12121a;
+    --bg3: #1a1a26;
+    --border: #2a2a3d;
+    --accent: #7c3aed;
+    --accent2: #a855f7;
+    --accent-glow: rgba(124,58,237,.35);
+    --green: #10b981;
+    --red: #ef4444;
+    --yellow: #f59e0b;
+    --text: #e2e8f0;
+    --text2: #94a3b8;
+    --text3: #64748b;
+    --radius: 12px;
+    --radius-sm: 8px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; min-height: 100vh; }
+
+  /* ── LAYOUT ── */
+  .app { display: grid; grid-template-rows: auto 1fr; min-height: 100vh; }
+  header {
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    display: flex; align-items: center; justify-content: space-between;
+    height: 60px; position: sticky; top: 0; z-index: 100;
+    backdrop-filter: blur(12px);
+  }
+  .logo { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1.1rem; }
+  .logo svg { color: var(--accent2); }
+  .status-badge {
+    display: flex; align-items: center; gap: 6px;
+    padding: 5px 12px; border-radius: 99px; font-size: .8rem; font-weight: 500;
+    border: 1px solid var(--border);
+  }
+  .status-badge.connected { border-color: var(--green); color: var(--green); background: rgba(16,185,129,.08); }
+  .status-badge.disconnected { border-color: var(--red); color: var(--red); background: rgba(239,68,68,.08); }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+
+  main { padding: 28px 24px; max-width: 1200px; margin: 0 auto; width: 100%; }
+
+  /* ── SECTIONS ── */
+  .section { margin-bottom: 36px; }
+  .section-title {
+    font-size: .7rem; font-weight: 600; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--text3); margin-bottom: 14px;
+  }
+
+  /* ── CARDS ── */
+  .card {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px;
+  }
+
+  /* ── CONNEXION ── */
+  .connect-form { display: flex; gap: 10px; flex-wrap: wrap; }
+  .connect-form textarea {
+    flex: 1; min-width: 280px; min-height: 70px; resize: vertical;
+    background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius-sm);
+    color: var(--text); padding: 10px 14px; font-size: .85rem; font-family: monospace;
+    outline: none; transition: border-color .2s;
+  }
+  .connect-form textarea:focus { border-color: var(--accent2); }
+  .connect-form textarea::placeholder { color: var(--text3); }
+  .btn {
+    display: inline-flex; align-items: center; gap: 7px; padding: 10px 18px;
+    border-radius: var(--radius-sm); border: none; cursor: pointer;
+    font-size: .875rem; font-weight: 500; transition: all .15s; white-space: nowrap;
+  }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover:not(:disabled) { background: var(--accent2); box-shadow: 0 0 16px var(--accent-glow); }
+  .btn-secondary { background: var(--bg3); color: var(--text2); border: 1px solid var(--border); }
+  .btn-secondary:hover:not(:disabled) { background: var(--border); color: var(--text); }
+  .btn-green { background: var(--green); color: #fff; }
+  .btn-green:hover:not(:disabled) { filter: brightness(1.1); }
+  .btn-sm { padding: 6px 12px; font-size: .8rem; }
+
+  .connect-hint {
+    font-size: .78rem; color: var(--text3); margin-top: 10px; line-height: 1.6;
+  }
+  .connect-hint code {
+    background: var(--bg3); border: 1px solid var(--border);
+    padding: 2px 7px; border-radius: 4px; font-size: .78rem; color: var(--accent2);
+  }
+
+  /* ── STATS BAR ── */
+  .stats-bar {
+    display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 20px;
+  }
+  .stat {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 14px 20px;
+    display: flex; align-items: center; gap: 12px; flex: 1; min-width: 140px;
+  }
+  .stat-icon { font-size: 1.4rem; }
+  .stat-val { font-size: 1.5rem; font-weight: 700; line-height: 1; }
+  .stat-label { font-size: .75rem; color: var(--text3); margin-top: 2px; }
+
+  /* ── ACTIONS BAR ── */
+  .actions-bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 20px; }
+  .search-input {
+    flex: 1; min-width: 200px; background: var(--bg2); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); color: var(--text); padding: 9px 14px;
+    font-size: .875rem; outline: none; transition: border-color .2s;
+  }
+  .search-input:focus { border-color: var(--accent2); }
+  .search-input::placeholder { color: var(--text3); }
+
+  /* ── SONGS GRID ── */
+  .songs-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 14px;
+  }
+  .song-card {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: var(--radius); overflow: hidden;
+    transition: border-color .2s, transform .15s;
+    position: relative;
+  }
+  .song-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+  .song-card.downloaded { border-color: rgba(16,185,129,.35); }
+
+  .song-art {
+    width: 100%; aspect-ratio: 1;
+    background: linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #1e1b4b 100%);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 2.5rem; position: relative; overflow: hidden;
+  }
+  .song-art img { width: 100%; height: 100%; object-fit: cover; position: absolute; inset: 0; }
+  .song-art-overlay {
+    position: absolute; inset: 0; background: rgba(0,0,0,.5);
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; transition: opacity .2s;
+  }
+  .song-card:hover .song-art-overlay { opacity: 1; }
+
+  .song-info { padding: 12px; }
+  .song-title { font-size: .875rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .song-meta { font-size: .75rem; color: var(--text3); margin-top: 3px; }
+  .song-actions { display: flex; gap: 6px; margin-top: 10px; }
+
+  .badge {
+    position: absolute; top: 8px; right: 8px;
+    background: var(--green); color: #fff;
+    font-size: .65rem; font-weight: 700; padding: 2px 7px; border-radius: 99px;
+  }
+  .badge.en-cours { background: var(--yellow); color: #000; }
+  .badge.erreur { background: var(--red); }
+
+  /* ── PROGRESS ── */
+  .progress-bar {
+    width: 100%; height: 4px; background: var(--bg3);
+    border-radius: 2px; overflow: hidden; margin-top: 8px;
+  }
+  .progress-fill {
+    height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2));
+    border-radius: 2px; transition: width .3s;
+  }
+
+  /* ── TACHES ── */
+  .taches-list { display: flex; flex-direction: column; gap: 10px; }
+  .tache-item {
+    background: var(--bg3); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 14px 16px;
+    display: grid; grid-template-columns: 1fr auto; gap: 8px;
+  }
+  .tache-titre { font-weight: 500; font-size: .9rem; }
+  .tache-status { font-size: .78rem; color: var(--text3); }
+  .tache-pct { font-size: .875rem; font-weight: 600; color: var(--accent2); }
+
+  /* ── FICHIERS ── */
+  .fichiers-list { display: flex; flex-direction: column; gap: 8px; }
+  .fichier-item {
+    background: var(--bg3); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 12px 16px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .fichier-icon { font-size: 1.3rem; flex-shrink: 0; }
+  .fichier-info { flex: 1; min-width: 0; }
+  .fichier-nom { font-size: .875rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .fichier-meta { font-size: .75rem; color: var(--text3); margin-top: 2px; }
+  .fichier-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+  /* ── EMPTY STATE ── */
+  .empty {
+    text-align: center; padding: 48px 24px;
+    color: var(--text3); font-size: .9rem;
+  }
+  .empty-icon { font-size: 3rem; margin-bottom: 12px; }
+
+  /* ── TOAST ── */
+  #toasts {
+    position: fixed; bottom: 24px; right: 24px;
+    display: flex; flex-direction: column; gap: 8px; z-index: 1000;
+  }
+  .toast {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 12px 16px;
+    font-size: .85rem; max-width: 320px;
+    animation: slideIn .2s ease; box-shadow: 0 8px 24px rgba(0,0,0,.4);
+  }
+  .toast.success { border-color: var(--green); }
+  .toast.error   { border-color: var(--red); }
+  @keyframes slideIn { from { transform: translateX(120%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+  /* ── SPINNER ── */
+  .spin { animation: spin .8s linear infinite; display: inline-block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── TABS ── */
+  .tabs { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid var(--border); }
+  .tab {
+    padding: 8px 16px; font-size: .875rem; cursor: pointer;
+    border-bottom: 2px solid transparent; margin-bottom: -1px; color: var(--text3);
+    transition: all .15s;
+  }
+  .tab.active { color: var(--accent2); border-bottom-color: var(--accent2); }
+  .tab:hover:not(.active) { color: var(--text); }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* ── PLAYER ── */
+  .mini-player {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: var(--bg2); border-top: 1px solid var(--border);
+    padding: 12px 24px; display: none;
+    align-items: center; gap: 16px; z-index: 50;
+  }
+  .mini-player.active { display: flex; }
+  .player-info { flex: 1; min-width: 0; }
+  .player-title { font-weight: 600; font-size: .9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .player-src { font-size: .75rem; color: var(--text3); }
+  audio { flex: 2; min-width: 200px; accent-color: var(--accent2); }
+
+  @media (max-width: 600px) {
+    main { padding: 16px; }
+    .songs-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+    header { padding: 0 16px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- HEADER -->
+<header>
+  <div class="logo">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
+    </svg>
+    Sonauto Downloader
+  </div>
+  <div id="statusBadge" class="status-badge disconnected">
+    <span class="dot"></span>
+    <span id="statusText">Non connecté</span>
+  </div>
+</header>
+
+<main>
+
+<!-- CONNEXION -->
+<div class="section" id="sectionConnexion">
+  <div class="section-title">Connexion</div>
+  <div class="card">
+    <div class="connect-form">
+      <textarea id="cookieInput" placeholder="Collez ici la valeur du cookie sb-db-auth-token.0&#10;(base64-eyJh...)"></textarea>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <button class="btn btn-primary" onclick="connecter()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+          Connecter
+        </button>
+        <button class="btn btn-secondary" onclick="verifierConnexion()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+          Vérifier
+        </button>
+      </div>
+    </div>
+    <p class="connect-hint">
+      Dans la console F12 sur <strong>sonauto.ai</strong> :<br>
+      <code>document.cookie.match(/sb-db-auth-token\.0=([^;]+)/)?.[1]</code>
+    </p>
+  </div>
+</div>
+
+<!-- STATS -->
+<div class="stats-bar" id="statsBar" style="display:none">
+  <div class="stat">
+    <div class="stat-icon">🎵</div>
+    <div>
+      <div class="stat-val" id="statSons">–</div>
+      <div class="stat-label">Sons likés</div>
+    </div>
+  </div>
+  <div class="stat">
+    <div class="stat-icon">✅</div>
+    <div>
+      <div class="stat-val" id="statTelechargés">–</div>
+      <div class="stat-label">Téléchargés</div>
+    </div>
+  </div>
+  <div class="stat">
+    <div class="stat-icon">⏳</div>
+    <div>
+      <div class="stat-val" id="statEnCours">–</div>
+      <div class="stat-label">En cours</div>
+    </div>
+  </div>
+  <div class="stat">
+    <div class="stat-icon">💾</div>
+    <div>
+      <div class="stat-val" id="statTaille">–</div>
+      <div class="stat-label">Stockage</div>
+    </div>
+  </div>
+</div>
+
+<!-- TABS -->
+<div class="tabs" id="mainTabs" style="display:none">
+  <div class="tab active" onclick="switchTab('sons')">🎵 Bibliothèque</div>
+  <div class="tab" onclick="switchTab('taches')">⬇️ Téléchargements <span id="badgeTaches" style="display:none;background:var(--accent);color:#fff;font-size:.65rem;padding:1px 6px;border-radius:99px;margin-left:4px"></span></div>
+  <div class="tab" onclick="switchTab('fichiers')">📁 Fichiers</div>
+</div>
+
+<!-- TAB: SONS -->
+<div class="tab-panel active" id="tabSons">
+  <div class="actions-bar">
+    <input class="search-input" type="text" id="searchInput" placeholder="Rechercher un son..." oninput="filtrerSons()">
+    <button class="btn btn-secondary" onclick="chargerSons()">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+      Actualiser
+    </button>
+    <button class="btn btn-primary" id="btnToutDl" onclick="toutTelecharger()" style="display:none">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Tout télécharger (<span id="btnToutCount">0</span>)
+    </button>
+  </div>
+  <div id="sonsList" class="songs-grid">
+    <div class="empty"><div class="empty-icon">🎵</div>Connectez-vous pour voir vos sons likés</div>
+  </div>
+</div>
+
+<!-- TAB: TÂCHES -->
+<div class="tab-panel" id="tabTaches">
+  <div class="actions-bar">
+    <button class="btn btn-secondary btn-sm" onclick="chargerTaches()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+      Actualiser
+    </button>
+    <button class="btn btn-secondary btn-sm" onclick="nettoyerTaches()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+      Nettoyer terminés
+    </button>
+  </div>
+  <div id="tachesList" class="taches-list">
+    <div class="empty"><div class="empty-icon">⏳</div>Aucun téléchargement en cours</div>
+  </div>
+</div>
+
+<!-- TAB: FICHIERS -->
+<div class="tab-panel" id="tabFichiers">
+  <div class="actions-bar">
+    <button class="btn btn-secondary btn-sm" onclick="chargerFichiers()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+      Actualiser
+    </button>
+  </div>
+  <div id="fichiersList" class="fichiers-list">
+    <div class="empty"><div class="empty-icon">📁</div>Aucun fichier téléchargé</div>
+  </div>
+</div>
+
+</main>
+</div>
+
+<!-- MINI PLAYER -->
+<div class="mini-player" id="miniPlayer">
+  <div class="player-info">
+    <div class="player-title" id="playerTitle">–</div>
+    <div class="player-src">🎵 MP3</div>
+  </div>
+  <audio id="audioPlayer" controls></audio>
+  <button class="btn btn-secondary btn-sm" onclick="fermerPlayer()">✕</button>
+</div>
+
+<!-- TOASTS -->
+<div id="toasts"></div>
+
+<script>
+const API = '';   // même origine
+let sons = [];
+let fichiersTelecharges = new Set();
+let tachesActives = {};
+let intervalleTaches = null;
+
+// ── UTILS ──────────────────────────────────────────────────────────────────
+
+function toast(msg, type = 'info', duree = 3500) {
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = msg;
+  document.getElementById('toasts').appendChild(el);
+  setTimeout(() => el.remove(), duree);
+}
+
+function fmt(octets) {
+  if (octets < 1024) return octets + ' o';
+  if (octets < 1048576) return (octets/1024).toFixed(1) + ' Ko';
+  return (octets/1048576).toFixed(1) + ' Mo';
+}
+
+async function api(method, path, body) {
+  const opts = { method, headers: {'Content-Type':'application/json'} };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(API + '/api' + path, opts);
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({detail: r.statusText}));
+    throw new Error(err.detail || r.statusText);
+  }
+  return r.json();
+}
+
+// ── CONNEXION ──────────────────────────────────────────────────────────────
+
+async function connecter() {
+  const cookie = document.getElementById('cookieInput').value.trim();
+  if (!cookie) { toast('Collez d\'abord la valeur du cookie', 'error'); return; }
+  try {
+    await api('POST', '/config/cookie', { cookie });
+    toast('Connecté avec succès ✓', 'success');
+    document.getElementById('cookieInput').value = '';
+    await verifierConnexion();
+    chargerTout();
+  } catch(e) { toast('Erreur : ' + e.message, 'error', 5000); }
+}
+
+async function verifierConnexion() {
+  try {
+    const s = await api('GET', '/sante');
+    const badge = document.getElementById('statusBadge');
+    const txt = document.getElementById('statusText');
+    if (s.token_defini) {
+      badge.className = 'status-badge connected';
+      txt.textContent = 'Connecté';
+      document.getElementById('statsBar').style.display = 'flex';
+      document.getElementById('mainTabs').style.display = 'flex';
+      document.getElementById('tabSons').classList.add('active');
+    } else {
+      badge.className = 'status-badge disconnected';
+      txt.textContent = 'Non connecté';
+    }
+  } catch(e) { toast('API inaccessible', 'error'); }
+}
+
+function chargerTout() {
+  chargerSons();
+  chargerFichiers();
+  chargerTaches();
+}
+
+// ── TABS ───────────────────────────────────────────────────────────────────
+
+function switchTab(id) {
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', ['sons','taches','fichiers'][i] === id));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab' + id.charAt(0).toUpperCase() + id.slice(1)).classList.add('active');
+  if (id === 'taches') chargerTaches();
+  if (id === 'fichiers') chargerFichiers();
+}
+
+// ── SONS ───────────────────────────────────────────────────────────────────
+
+async function chargerSons() {
+  const el = document.getElementById('sonsList');
+  el.innerHTML = '<div class="empty"><div class="spin">⟳</div> Chargement…</div>';
+  try {
+    sons = await api('GET', '/sons');
+    document.getElementById('statSons').textContent = sons.length;
+    document.getElementById('btnToutDl').style.display = '';
+    renderSons();
+  } catch(e) {
+    el.innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div>' + e.message + '</div>';
+  }
+}
+
+function filtrerSons() {
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  const filtres = sons.filter(s => s.titre.toLowerCase().includes(q));
+  renderSons(filtres);
+}
+
+function renderSons(liste) {
+  liste = liste || sons;
+  const el = document.getElementById('sonsList');
+  const nonDl = liste.filter(s => !fichiersTelecharges.has(s.titre));
+  document.getElementById('btnToutCount').textContent = nonDl.length;
+
+  if (!liste.length) {
+    el.innerHTML = '<div class="empty"><div class="empty-icon">🔍</div>Aucun résultat</div>';
+    return;
+  }
+
+  el.innerHTML = liste.map(s => {
+    const dl = fichiersTelecharges.has(s.titre);
+    const enCours = Object.values(tachesActives).some(t => t.titre === s.titre && t.statut === 'en_cours');
+    const tache = Object.values(tachesActives).find(t => t.titre === s.titre);
+    const pct = tache ? tache.progression : 0;
+
+    const artUrl = `https://scdn.sonauto.ai/images/${encodeURIComponent(s.donnees_brutes?.song_path || '')}?optimizer=image&width=256&quality=75`;
+
+    return `<div class="song-card ${dl ? 'downloaded' : ''}" data-id="${s.id}">
+      <div class="song-art">
+        <img src="${artUrl}" onerror="this.style.display='none'" loading="lazy">
+        🎵
+        <div class="song-art-overlay">
+          ${dl ? `<button class="btn btn-sm btn-green" onclick="jouerFichier('${encodeURIComponent(s.titre)}')">▶ Écouter</button>`
+               : `<button class="btn btn-sm btn-primary" onclick="telechargerSon('${s.id}', this)">⬇ Télécharger</button>`}
+        </div>
+        ${dl ? '<span class="badge">✓</span>' : ''}
+        ${enCours ? '<span class="badge en-cours">⬇</span>' : ''}
+      </div>
+      <div class="song-info">
+        <div class="song-title" title="${s.titre}">${s.titre}</div>
+        <div class="song-meta">${s.tags || 'Sonauto.ai'}</div>
+        ${enCours ? `<div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── TÉLÉCHARGEMENTS ────────────────────────────────────────────────────────
+
+async function telechargerSon(id, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  try {
+    const r = await api('POST', `/telecharger/${id}`);
+    toast('Téléchargement lancé ✓', 'success');
+    suivreTache(r.tache_id);
+    switchTab('taches');
+  } catch(e) {
+    toast('Erreur : ' + e.message, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = '⬇ Télécharger'; }
+  }
+}
+
+async function toutTelecharger() {
+  const btn = document.getElementById('btnToutDl');
+  btn.disabled = true;
+  try {
+    const r = await api('POST', '/telecharger/tous');
+    toast(`${r.length} téléchargements lancés ✓`, 'success');
+    r.forEach(t => suivreTache(t.tache_id));
+    switchTab('taches');
+    chargerTaches();
+  } catch(e) {
+    toast('Erreur : ' + e.message, 'error');
+  } finally { btn.disabled = false; }
+}
+
+function suivreTache(tacheId) {
+  const es = new EventSource(`/api/taches/${tacheId}/flux`);
+  es.onmessage = e => {
+    try {
+      const t = JSON.parse(e.data);
+      tachesActives[tacheId] = t;
+      mettreAJourTache(t);
+      mettreAJourBadge();
+      if (['terminé','erreur','déjà_présent'].includes(t.statut)) {
+        es.close();
+        if (t.statut === 'terminé') {
+          fichiersTelecharges.add(t.titre);
+          toast(`"${t.titre}" téléchargé ✓`, 'success');
+          chargerFichiers();
+          renderSons();
+        }
+      }
+    } catch(_) {}
+  };
+  es.onerror = () => es.close();
+}
+
+async function chargerTaches() {
+  try {
+    const taches = await api('GET', '/taches');
+    taches.forEach(t => { tachesActives[t.id] = t; });
+    renderTaches(taches);
+    mettreAJourBadge();
+    const enCours = taches.filter(t => t.statut === 'en_cours' || t.statut === 'en_attente').length;
+    document.getElementById('statEnCours').textContent = enCours;
+    document.getElementById('statTelechargés').textContent = taches.filter(t => t.statut === 'terminé' || t.statut === 'déjà_présent').length;
+  } catch(e) {}
+}
+
+function renderTaches(taches) {
+  const el = document.getElementById('tachesList');
+  if (!taches.length) {
+    el.innerHTML = '<div class="empty"><div class="empty-icon">⏳</div>Aucun téléchargement</div>';
+    return;
+  }
+  el.innerHTML = taches.slice().reverse().map(t => {
+    const icons = { terminé: '✅', erreur: '❌', déjà_présent: '⚡', en_cours: '⬇️', en_attente: '🕐' };
+    const icon = icons[t.statut] || '🔄';
+    return `<div class="tache-item">
+      <div>
+        <div class="tache-titre">${icon} ${t.titre}</div>
+        <div class="tache-status">
+          ${t.statut === 'en_cours' ? `${fmt(t.octets_recus)} / ${fmt(t.octets_total)}` : t.erreur || t.statut}
+        </div>
+        ${['en_cours','en_attente'].includes(t.statut) ? `<div class="progress-bar" style="margin-top:6px"><div class="progress-fill" style="width:${t.progression}%"></div></div>` : ''}
+      </div>
+      <div class="tache-pct">${t.progression.toFixed(0)}%</div>
+    </div>`;
+  }).join('');
+}
+
+function mettreAJourTache(t) {
+  chargerTaches();
+}
+
+function mettreAJourBadge() {
+  const enCours = Object.values(tachesActives).filter(t => t.statut === 'en_cours' || t.statut === 'en_attente').length;
+  const badge = document.getElementById('badgeTaches');
+  badge.style.display = enCours ? '' : 'none';
+  badge.textContent = enCours;
+}
+
+function nettoyerTaches() {
+  const termines = ['terminé','erreur','déjà_présent'];
+  Object.keys(tachesActives).forEach(id => {
+    if (termines.includes(tachesActives[id].statut)) delete tachesActives[id];
+  });
+  chargerTaches();
+}
+
+// ── FICHIERS ───────────────────────────────────────────────────────────────
+
+async function chargerFichiers() {
+  try {
+    const fichiers = await api('GET', '/fichiers');
+    fichiersTelecharges = new Set(fichiers.map(f => f.nom.replace('.mp3','')));
+    renderFichiers(fichiers);
+
+    let totalOctets = fichiers.reduce((acc, f) => acc + f.taille, 0);
+    document.getElementById('statTaille').textContent = fmt(totalOctets);
+    document.getElementById('statTelechargés').textContent = fichiers.length;
+  } catch(e) {}
+}
+
+function renderFichiers(fichiers) {
+  const el = document.getElementById('fichiersList');
+  if (!fichiers.length) {
+    el.innerHTML = '<div class="empty"><div class="empty-icon">📁</div>Aucun fichier téléchargé</div>';
+    return;
+  }
+  el.innerHTML = fichiers.map(f => `
+    <div class="fichier-item">
+      <div class="fichier-icon">🎵</div>
+      <div class="fichier-info">
+        <div class="fichier-nom">${f.nom}</div>
+        <div class="fichier-meta">${fmt(f.taille)}${f.lyrics ? ' · 📝 LRC' : ''}</div>
+      </div>
+      <div class="fichier-actions">
+        <button class="btn btn-secondary btn-sm" onclick="jouerFichier('${encodeURIComponent(f.nom)}')">▶</button>
+        <a class="btn btn-secondary btn-sm" href="/api/fichiers/${encodeURIComponent(f.nom)}" download>⬇</a>
+        ${f.lyrics ? `<button class="btn btn-secondary btn-sm" onclick="voirLyrics('${encodeURIComponent(f.nom)}')">📝</button>` : ''}
+      </div>
+    </div>
+  `).join('');
+}
+
+// ── PLAYER ─────────────────────────────────────────────────────────────────
+
+function jouerFichier(nomEncode) {
+  const nom = decodeURIComponent(nomEncode);
+  const nomMp3 = nom.endsWith('.mp3') ? nom : nom + '.mp3';
+  const player = document.getElementById('miniPlayer');
+  const audio = document.getElementById('audioPlayer');
+  document.getElementById('playerTitle').textContent = nomMp3.replace('.mp3','');
+  audio.src = `/api/fichiers/${encodeURIComponent(nomMp3)}`;
+  player.classList.add('active');
+  audio.play();
+}
+
+function fermerPlayer() {
+  document.getElementById('audioPlayer').pause();
+  document.getElementById('miniPlayer').classList.remove('active');
+}
+
+async function voirLyrics(nomEncode) {
+  const nom = decodeURIComponent(nomEncode);
+  try {
+    const r = await api('GET', `/fichiers/${encodeURIComponent(nom)}/lyrics`);
+    const pre = document.createElement('pre');
+    pre.style.cssText = 'white-space:pre-wrap;font-size:.8rem;color:var(--text2);max-height:60vh;overflow:auto;';
+    pre.textContent = r.lyrics;
+    const modal = document.createElement('div');
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:200;padding:24px;';
+    const box = document.createElement('div');
+    box.style.cssText = 'background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:24px;max-width:600px;width:100%;';
+    box.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px"><b>${nom.replace('.mp3','')}</b><button class="btn btn-secondary btn-sm" onclick="this.closest('[style*=fixed]').remove()">✕</button></div>`;
+    box.appendChild(pre);
+    modal.appendChild(box);
+    document.body.appendChild(modal);
+    modal.onclick = e => { if (e.target === modal) modal.remove(); };
+  } catch(e) { toast('Lyrics non disponibles', 'error'); }
+}
+
+// ── INIT ───────────────────────────────────────────────────────────────────
+
+async function init() {
+  await verifierConnexion();
+  const badge = document.getElementById('statusBadge');
+  if (badge.classList.contains('connected')) {
+    chargerTout();
+    // Actualisation automatique des tâches toutes les 2s
+    setInterval(chargerTaches, 2000);
+  }
+}
+
+init();
+</script>
+</body>
+</html>

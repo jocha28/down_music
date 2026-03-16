@@ -12,6 +12,8 @@ from pathlib import Path
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from api.routes import router
 
@@ -108,7 +110,7 @@ API pour télécharger vos sons likés sur **Sonauto.ai** avec leurs lyrics sync
     """,
     version="1.0.0",
     lifespan=duree_de_vie,
-    docs_url="/",
+    docs_url="/swagger",
     redoc_url="/docs",
 )
 
@@ -120,6 +122,20 @@ app.add_middleware(
 )
 
 app.include_router(router, prefix="/api")
+
+# ── Fichiers statiques et interface web ───────────────────────────────────────
+
+_STATIC = Path("static")
+if _STATIC.exists():
+    app.mount("/static", StaticFiles(directory=str(_STATIC)), name="static")
+
+
+@app.get("/", include_in_schema=False)
+async def interface_web():
+    index = _STATIC / "index.html"
+    if index.exists():
+        return FileResponse(str(index))
+    return {"message": "Interface web non trouvée — placez index.html dans static/"}
 
 
 # ── Lancement direct ──────────────────────────────────────────────────────────
