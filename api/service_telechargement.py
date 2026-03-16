@@ -36,10 +36,20 @@ def obtenir_tache(tache_id: str) -> ProgressionTelechargement | None:
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _nom_propre(titre: str, ext: str = ".mp3") -> str:
+def _nom_propre(titre: str, ext: str = ".mp3", dossier: Path | None = None) -> str:
     import re
     nom = re.sub(r'[<>:"/\\|?*]', "", titre).strip(". ")
-    return (nom[:100] or "sans_titre") + ext
+    base = nom[:100] or "sans_titre"
+    if dossier is None:
+        return base + ext
+    # Éviter les conflits : ajouter (2), (3)… si le fichier existe déjà
+    chemin = dossier / (base + ext)
+    if not chemin.exists():
+        return base + ext
+    i = 2
+    while (dossier / f"{base} ({i}){ext}").exists():
+        i += 1
+    return f"{base} ({i}){ext}"
 
 
 def _generer_lrc(aligned: list) -> str:
@@ -108,12 +118,16 @@ async def _executer_telechargement(tache_id: str, son: Son, token: str):
     tache = _taches[tache_id]
     DOSSIER_MUSIQUES.mkdir(parents=True, exist_ok=True)
 
-    chemin_mp3 = DOSSIER_MUSIQUES / _nom_propre(son.titre)
-    if chemin_mp3.exists():
+    # Détecter le nom de fichier disponible (gère les doublons de titres)
+    nom_base = _nom_propre(son.titre)
+    chemin_base = DOSSIER_MUSIQUES / nom_base
+    if chemin_base.exists():
         tache.statut         = StatutTelecharge.DEJA_PRESENT
         tache.progression    = 100.0
-        tache.chemin_fichier = str(chemin_mp3)
+        tache.chemin_fichier = str(chemin_base)
         return
+    # Nom unique même si un autre téléchargement concurrent a le même titre
+    chemin_mp3 = DOSSIER_MUSIQUES / _nom_propre(son.titre, dossier=DOSSIER_MUSIQUES)
 
     tache.statut = StatutTelecharge.EN_COURS
 
