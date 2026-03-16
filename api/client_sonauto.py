@@ -124,10 +124,16 @@ class ClientSonauto:
     # ── Sons likés via Supabase PostgREST ─────────────────────────────────────
 
     async def lister_sons_likes(self) -> list[Son]:
-        """Récupère TOUS les sons likés en paginant par pages de 1000."""
-        PAGE = 1000
+        """Récupère TOUS les sons likés en paginant.
+
+        Supabase plafonne les réponses côté serveur (≈60 par page).
+        On continue jusqu'à atteindre le total indiqué par Content-Range,
+        ou jusqu'à recevoir une page vide.
+        """
+        PAGE = 60   # correspond au plafond Supabase observé
         tous: list[dict] = []
         offset = 0
+        total_supabase = None
         try:
             while True:
                 r = await self._client.get(
@@ -140,20 +146,25 @@ class ClientSonauto:
                         "limit":    str(PAGE),
                         "offset":   str(offset),
                     },
-                    headers=self._headers_supa,
+                    headers={**self._headers_supa, "Prefer": "count=exact"},
                     timeout=20,
                 )
                 if r.status_code == 401:
                     raise PermissionError("Token invalide ou expiré")
-                if r.status_code != 200:
+                if r.status_code not in (200, 206):
                     break
+                # Lire le total depuis Content-Range (ex: "0-59/272")
+                if total_supabase is None:
+                    cr = r.headers.get("content-range", "")
+                    if "/" in cr:
+                        total_supabase = int(cr.split("/")[-1])
                 page = r.json()
                 if not isinstance(page, list) or not page:
                     break
                 tous.extend(page)
-                if len(page) < PAGE:
-                    break          # dernière page, on a tout
-                offset += PAGE
+                offset += len(page)
+                if total_supabase is not None and len(tous) >= total_supabase:
+                    break
         except PermissionError:
             raise
         except Exception:
