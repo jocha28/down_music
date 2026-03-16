@@ -93,73 +93,48 @@ async def _executer_telechargement(tache_id: str, son: Son, token: str):
     tache = _taches[tache_id]
     DOSSIER_MUSIQUES.mkdir(parents=True, exist_ok=True)
 
-    # Si pas d'URL, essayer de la récupérer
-    url_audio = son.url_audio
-    if not url_audio:
-        async with ClientSonauto(token) as client:
-            # 1. Détails via API
-            details = await client.obtenir_son(son.id)
-            if details:
-                url_audio = details.url_audio
-                son = details
-            # 2. Résolution directe sur le CDN
-            if not url_audio:
-                url_audio = await client.resoudre_url_audio(son.id) or ""
-
-    if not url_audio:
-        tache.statut = StatutTelecharge.ERREUR
-        tache.erreur = "Aucune URL audio disponible"
-        return
-
-    chemin = DOSSIER_MUSIQUES / _nom_propre(son.titre)
-
-    if chemin.exists():
+    chemin_mp3 = DOSSIER_MUSIQUES / _nom_propre(son.titre)
+    if chemin_mp3.exists():
         tache.statut         = StatutTelecharge.DEJA_PRESENT
         tache.progression    = 100.0
-        tache.chemin_fichier = str(chemin)
+        tache.chemin_fichier = str(chemin_mp3)
         return
 
     tache.statut = StatutTelecharge.EN_COURS
 
-    # Détecter le format audio depuis l'URL (OGG ou MP3)
-    est_ogg = url_audio.lower().endswith(".ogg")
-    ext_tmp = ".ogg" if est_ogg else ".mp3"
-    chemin_tmp = DOSSIER_MUSIQUES / _nom_propre(son.titre, ext_tmp)
-    chemin_mp3 = DOSSIER_MUSIQUES / _nom_propre(son.titre, ".mp3")
+    # 1. Obtenir l'URL MP3 via le backend (POST /process/download_audio)
+    async with ClientSonauto(token) as client:
+        url_mp3 = await client.obtenir_url_mp3(son.id)
+
+    if not url_mp3:
+        tache.statut = StatutTelecharge.ERREUR
+        tache.erreur = "Impossible d'obtenir l'URL MP3 depuis le backend"
+        return
 
     def maj_progression(recu: int, total: int):
         tache.octets_recus = recu
         tache.octets_total = total
-        # Téléchargement = 0-80%, conversion = 80-100%
-        tache.progression  = round(recu / total * 80, 1) if total else 0
+        tache.progression  = round(recu / total * 95, 1) if total else 0
 
+    chemin_tmp = chemin_mp3.with_suffix(".tmp")
     try:
+        # 2. Télécharger le MP3 (URL CDN publique, pas besoin d'auth)
         async with ClientSonauto(token) as client:
             with open(chemin_tmp, "wb") as f:
-                async for chunk in client.stream_audio(url_audio, maj_progression):
+                async for chunk in client.stream_audio(url_mp3, maj_progression):
                     f.write(chunk)
 
-        tache.progression = 85.0
+        chemin_tmp.rename(chemin_mp3)
+        tache.progression = 97.0
 
-        # Conversion OGG → MP3 si nécessaire
-        if est_ogg:
-            import asyncio
-            chemin_final = await asyncio.get_event_loop().run_in_executor(
-                None, convertir_ogg_en_mp3, chemin_tmp
-            )
-        else:
-            chemin_final = chemin_tmp
-
-        tache.progression = 95.0
-
-        # Lyrics
+        # 3. Métadonnées ID3
         brut, synced = _extraire_lyrics(son)
-        _integrer_id3(chemin_final, son, brut, synced)
-        _sauvegarder_lrc(chemin_final, brut, synced)
+        _integrer_id3(chemin_mp3, son, brut, synced)
+        _sauvegarder_lrc(chemin_mp3, brut, synced)
 
         tache.statut         = StatutTelecharge.TERMINE
         tache.progression    = 100.0
-        tache.chemin_fichier = str(chemin_final)
+        tache.chemin_fichier = str(chemin_mp3)
 
     except Exception as e:
         tache.statut = StatutTelecharge.ERREUR

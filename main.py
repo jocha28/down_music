@@ -18,21 +18,68 @@ from api.routes import router
 
 # ── Chargement du token au démarrage ─────────────────────────────────────────
 
-def _charger_token_sauvegarde() -> str:
+def _charger_config() -> dict:
     config_path = Path(".config_sonauto.json")
     if config_path.exists():
         try:
-            return json.loads(config_path.read_text()).get("token", "")
+            return json.loads(config_path.read_text())
         except Exception:
             pass
-    return ""
+    return {}
+
+
+async def _rafraichir_token(app) -> bool:
+    """Renouvelle le token via le refresh_token Supabase si disponible."""
+    import httpx
+    refresh = getattr(app.state, "refresh_token", None)
+    if not refresh:
+        return False
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            r = await client.post(
+                "https://db.sonauto.ai/auth/v1/token?grant_type=refresh_token",
+                headers={
+                    "Content-Type": "application/json",
+                    "apikey": "sb_publishable_Ap6tbqA6iU0D4uuvjB5v0A_C0paifNR",
+                },
+                json={"refresh_token": refresh},
+            )
+            if r.status_code == 200:
+                data = r.json()
+                app.state.token         = data["access_token"]
+                app.state.refresh_token = data["refresh_token"]
+                config = {"token": app.state.token, "refresh_token": app.state.refresh_token}
+                config_path = Path(".config_sonauto.json")
+                config_path.write_text(json.dumps(config, indent=2))
+                config_path.chmod(0o600)
+                print("  Token renouvelé automatiquement ✓")
+                return True
+    except Exception as e:
+        print(f"  Échec du renouvellement : {e}")
+    return False
 
 
 @asynccontextmanager
 async def duree_de_vie(app: FastAPI):
-    app.state.token = _charger_token_sauvegarde()
+    import base64, time
+    config = _charger_config()
+    app.state.token         = config.get("token", "")
+    app.state.refresh_token = config.get("refresh_token", "")
+
     if app.state.token:
-        print(f"  Token chargé depuis .config_sonauto.json")
+        # Vérifier l'expiration du token
+        try:
+            parts = app.state.token.split(".")
+            p = parts[1].replace("-", "+").replace("_", "/")
+            p += "=" * (4 - len(p) % 4)
+            payload = json.loads(base64.b64decode(p))
+            if payload.get("exp", 0) < time.time() + 60:
+                print("  Token expiré — renouvellement en cours...")
+                await _rafraichir_token(app)
+            else:
+                print("  Token chargé et valide ✓")
+        except Exception:
+            print("  Token chargé")
     else:
         print("  Aucun token — POST /config/token pour en définir un")
     yield
