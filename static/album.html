@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gestionnaire d'albums — Sonauto Downloader</title>
+<style>
+  :root {
+    --bg: #0a0a0f; --bg2: #12121a; --bg3: #1a1a26;
+    --border: #2a2a3d; --accent: #7c3aed; --accent2: #a855f7;
+    --accent-glow: rgba(124,58,237,.35);
+    --green: #10b981; --red: #ef4444; --yellow: #f59e0b;
+    --text: #e2e8f0; --text2: #94a3b8; --text3: #64748b;
+    --radius: 12px; --radius-sm: 8px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; height: 100vh; display: grid; grid-template-rows: 60px 1fr; overflow: hidden; }
+
+  /* ── HEADER ── */
+  header {
+    background: var(--bg2); border-bottom: 1px solid var(--border);
+    padding: 0 24px; display: flex; align-items: center; justify-content: space-between;
+    position: sticky; top: 0; z-index: 100;
+  }
+  .logo { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1.1rem; }
+  .logo svg { color: var(--accent2); }
+  .header-center { font-size: .85rem; color: var(--text3); }
+  .btn {
+    display: inline-flex; align-items: center; gap: 7px; padding: 9px 16px;
+    border-radius: var(--radius-sm); border: none; cursor: pointer;
+    font-size: .875rem; font-weight: 500; transition: all .15s; white-space: nowrap;
+  }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover:not(:disabled) { background: var(--accent2); box-shadow: 0 0 16px var(--accent-glow); }
+  .btn-secondary { background: var(--bg3); color: var(--text2); border: 1px solid var(--border); }
+  .btn-secondary:hover:not(:disabled) { background: var(--border); color: var(--text); }
+  .btn-sm { padding: 5px 11px; font-size: .78rem; }
+  .btn-icon { padding: 6px; background: transparent; border: 1px solid var(--border); color: var(--text3); border-radius: 6px; }
+  .btn-icon:hover { background: var(--bg3); color: var(--text); }
+  .btn-danger { background: rgba(239,68,68,.12); color: var(--red); border: 1px solid rgba(239,68,68,.3); }
+  .btn-danger:hover { background: rgba(239,68,68,.2); }
+
+  /* ── LAYOUT 3 COLONNES ── */
+  .workspace { display: grid; grid-template-columns: 260px 1fr 320px; height: 100%; overflow: hidden; }
+
+  /* ── COLONNE GAUCHE : liste MP3 ── */
+  .col-mp3 { border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+  .col-header { padding: 14px 16px 10px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .col-title { font-size: .7rem; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--text3); margin-bottom: 10px; }
+  .search-input {
+    width: 100%; background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius-sm);
+    color: var(--text); padding: 8px 12px; font-size: .8rem; outline: none; transition: border-color .2s;
+  }
+  .search-input:focus { border-color: var(--accent2); }
+  .search-input::placeholder { color: var(--text3); }
+  .mp3-list { flex: 1; overflow-y: auto; padding: 6px; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+  .mp3-item {
+    display: flex; align-items: center; gap: 10px; padding: 9px 10px;
+    border-radius: var(--radius-sm); cursor: pointer; transition: background .15s;
+    user-select: none;
+  }
+  .mp3-item:hover { background: var(--bg3); }
+  .mp3-item.in-album { opacity: .35; cursor: default; pointer-events: none; }
+  .mp3-thumb {
+    width: 34px; height: 34px; border-radius: 5px; background: var(--bg3);
+    flex-shrink: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; font-size: .9rem;
+  }
+  .mp3-thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .mp3-name { font-size: .8rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
+  .mp3-add-btn {
+    flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; background: var(--accent);
+    color: #fff; border: none; font-size: .85rem; cursor: pointer; display: flex; align-items: center; justify-content: center;
+    opacity: 0; transition: opacity .15s;
+  }
+  .mp3-item:hover .mp3-add-btn { opacity: 1; }
+
+  /* ── COLONNE CENTRALE : tracklist ── */
+  .col-tracks { display: flex; flex-direction: column; overflow: hidden; }
+  .tracks-header { padding: 16px 20px 12px; border-bottom: 1px solid var(--border); flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; }
+  .tracks-count { font-size: .78rem; color: var(--text3); }
+  .tracklist { flex: 1; overflow-y: auto; padding: 10px 16px; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+
+  .track-item {
+    display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+    background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+    margin-bottom: 6px; cursor: grab; transition: border-color .15s, transform .1s, box-shadow .1s;
+    user-select: none;
+  }
+  .track-item:active { cursor: grabbing; }
+  .track-item.drag-over { border-color: var(--accent2); background: rgba(124,58,237,.08); }
+  .track-item.dragging { opacity: .4; transform: scale(.98); }
+
+  .track-num {
+    width: 26px; height: 26px; border-radius: 50%; background: var(--bg3); border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center; font-size: .75rem;
+    font-weight: 700; color: var(--accent2); flex-shrink: 0;
+  }
+  .track-cover {
+    width: 38px; height: 38px; border-radius: 5px; background: var(--bg3);
+    flex-shrink: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; font-size: 1rem;
+  }
+  .track-cover img { width: 100%; height: 100%; object-fit: cover; }
+  .track-info { flex: 1; min-width: 0; }
+  .track-title { font-size: .875rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .track-subtitle { font-size: .72rem; color: var(--text3); margin-top: 2px; }
+  .drag-handle { color: var(--text3); cursor: grab; padding: 0 2px; flex-shrink: 0; }
+
+  .empty-tracks {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    height: 100%; color: var(--text3); font-size: .9rem; gap: 12px; padding: 40px;
+    text-align: center;
+  }
+  .empty-tracks-icon { font-size: 3rem; }
+  .drop-zone-active { background: rgba(124,58,237,.05) !important; border: 2px dashed var(--accent) !important; border-radius: var(--radius); }
+
+  /* ── COLONNE DROITE : infos album ── */
+  .col-album { border-left: 1px solid var(--border); display: flex; flex-direction: column; overflow-y: auto; padding: 20px; gap: 18px; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+
+  .cover-zone {
+    width: 100%; aspect-ratio: 1; background: var(--bg3); border: 2px dashed var(--border);
+    border-radius: var(--radius); display: flex; flex-direction: column; align-items: center; justify-content: center;
+    cursor: pointer; transition: border-color .2s; position: relative; overflow: hidden;
+  }
+  .cover-zone:hover { border-color: var(--accent2); }
+  .cover-zone img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .cover-placeholder { display: flex; flex-direction: column; align-items: center; gap: 8px; color: var(--text3); font-size: .8rem; }
+  .cover-placeholder svg { opacity: .4; }
+  .cover-hint { font-size: .72rem; color: var(--text3); text-align: center; margin-top: -8px; }
+
+  .field-group { display: flex; flex-direction: column; gap: 6px; }
+  .field-label { font-size: .72rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--text3); }
+  .field-input {
+    background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius-sm);
+    color: var(--text); padding: 9px 12px; font-size: .875rem; outline: none;
+    transition: border-color .2s; width: 100%;
+  }
+  .field-input:focus { border-color: var(--accent2); }
+  .field-input::placeholder { color: var(--text3); }
+
+  .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  .save-section { display: flex; flex-direction: column; gap: 8px; margin-top: auto; padding-top: 8px; }
+  .save-info { font-size: .75rem; color: var(--text3); text-align: center; line-height: 1.5; }
+
+  /* ── TOAST ── */
+  #toasts { position: fixed; bottom: 24px; right: 24px; display: flex; flex-direction: column; gap: 8px; z-index: 1000; }
+  .toast {
+    background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+    padding: 12px 16px; font-size: .85rem; max-width: 320px;
+    animation: slideIn .2s ease; box-shadow: 0 8px 24px rgba(0,0,0,.4);
+  }
+  .toast.success { border-color: var(--green); }
+  .toast.error   { border-color: var(--red); }
+  @keyframes slideIn { from { transform: translateX(120%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  .spin { animation: spin .8s linear infinite; display: inline-block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── PROGRESS BAR ── */
+  .progress-wrap { display: none; flex-direction: column; gap: 6px; }
+  .progress-wrap.visible { display: flex; }
+  .progress-bar { width: 100%; height: 6px; background: var(--bg3); border-radius: 3px; overflow: hidden; }
+  .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); border-radius: 3px; transition: width .3s; }
+  .progress-label { font-size: .75rem; color: var(--text3); text-align: center; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
+    </svg>
+    Sonauto Downloader
+  </div>
+  <span class="header-center">Gestionnaire d'albums</span>
+  <a href="/static/editeur.html" class="btn btn-secondary btn-sm">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+    Retour
+  </a>
+</header>
+
+<div class="workspace">
+
+  <!-- ── COLONNE GAUCHE : MP3 disponibles ── -->
+  <div class="col-mp3">
+    <div class="col-header">
+      <div class="col-title">Fichiers MP3</div>
+      <input class="search-input" type="text" id="searchMp3" placeholder="Rechercher..." oninput="filtrerMp3()">
+    </div>
+    <div class="mp3-list" id="mp3List">
+      <div style="padding:20px;text-align:center;color:var(--text3);font-size:.85rem;">
+        <div class="spin">⟳</div> Chargement…
+      </div>
+    </div>
+  </div>
+
+  <!-- ── COLONNE CENTRALE : tracklist ── -->
+  <div class="col-tracks">
+    <div class="tracks-header">
+      <div>
+        <div style="font-weight:600;font-size:.95rem;">Pistes de l'album</div>
+        <div class="tracks-count" id="tracksCount">0 piste(s) — glisser pour réordonner</div>
+      </div>
+      <button class="btn btn-secondary btn-sm" onclick="viderTracklist()" id="btnVider" style="display:none">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+        Vider
+      </button>
+    </div>
+    <div class="tracklist" id="tracklist" ondragover="dragOver(event)" ondrop="dropOnList(event)">
+      <div class="empty-tracks" id="emptyTracks">
+        <div class="empty-tracks-icon">💿</div>
+        <div>Cliquez sur un MP3 à gauche<br>pour l'ajouter à l'album</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── COLONNE DROITE : infos album ── -->
+  <div class="col-album">
+    <div class="col-title" style="margin-bottom:-8px">Informations de l'album</div>
+
+    <!-- Cover -->
+    <div>
+      <div class="cover-zone" id="coverZone" onclick="document.getElementById('coverInput').click()">
+        <div class="cover-placeholder" id="coverPlaceholder">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
+            <polyline points="21 15 16 10 5 21"/>
+          </svg>
+          <span>Ajouter une cover</span>
+        </div>
+        <img id="coverPreview" style="display:none" alt="cover">
+      </div>
+      <div class="cover-hint">JPG ou PNG — cliquer pour changer</div>
+      <input type="file" id="coverInput" accept="image/*" style="display:none" onchange="previewCover(this)">
+    </div>
+
+    <!-- Nom album -->
+    <div class="field-group">
+      <label class="field-label">Nom de l'album</label>
+      <input class="field-input" type="text" id="albumNom" placeholder="Mon album…">
+    </div>
+
+    <!-- Artiste -->
+    <div class="field-group">
+      <label class="field-label">Artiste</label>
+      <input class="field-input" type="text" id="albumArtiste" placeholder="Nom de l'artiste…">
+    </div>
+
+    <!-- Année / Genre -->
+    <div class="row-2">
+      <div class="field-group">
+        <label class="field-label">Année</label>
+        <input class="field-input" type="text" id="albumAnnee" placeholder="2025">
+      </div>
+      <div class="field-group">
+        <label class="field-label">Genre</label>
+        <input class="field-input" type="text" id="albumGenre" placeholder="Rap…">
+      </div>
+    </div>
+
+    <!-- Options -->
+    <div class="field-group">
+      <label class="field-label" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+        <input type="checkbox" id="optNumerotation" checked style="accent-color:var(--accent2);">
+        Numéroter les pistes automatiquement
+      </label>
+      <label class="field-label" style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:6px;">
+        <input type="checkbox" id="optCover" checked style="accent-color:var(--accent2);">
+        Appliquer la cover à toutes les pistes
+      </label>
+      <label class="field-label" style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:6px;">
+        <input type="checkbox" id="optArtiste" checked style="accent-color:var(--accent2);">
+        Appliquer l'artiste à toutes les pistes
+      </label>
+    </div>
+
+    <!-- Progression -->
+    <div class="progress-wrap" id="progressWrap">
+      <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+      <div class="progress-label" id="progressLabel">0 / 0</div>
+    </div>
+
+    <!-- Sauvegarde -->
+    <div class="save-section">
+      <div class="save-info" id="saveInfo">Ajoutez des pistes pour pouvoir enregistrer</div>
+      <button class="btn btn-primary" id="btnSave" onclick="enregistrerAlbum()" disabled>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        Enregistrer l'album
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<div id="toasts"></div>
+
+<script>
+const API = '';
+let tousLesMp3 = [];   // [{nom, taille, cover_url}]
+let tracklist  = [];   // [{nom, titre, artiste, annee, genre, cover_url}]
+let dragSrcIdx = null;
+
+// ── UTILS ──────────────────────────────────────────────────────────────────
+
+function toast(msg, type = 'info', duree = 3500) {
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = msg;
+  document.getElementById('toasts').appendChild(el);
+  setTimeout(() => el.remove(), duree);
+}
+
+async function api(method, path, body) {
+  const opts = { method, headers: {'Content-Type':'application/json'} };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(API + '/api' + path, opts);
+  if (!r.ok) { const e = await r.json().catch(() => ({detail:r.statusText})); throw new Error(e.detail||r.statusText); }
+  return r.json();
+}
+
+// ── CHARGEMENT MP3 ─────────────────────────────────────────────────────────
+
+async function chargerMp3() {
+  try {
+    const fichiers = await api('GET', '/fichiers');
+    tousLesMp3 = fichiers.map(f => ({
+      nom: f.nom,
+      titre: f.nom.replace('.mp3',''),
+      cover_url: `/api/fichiers/${encodeURIComponent(f.nom)}/cover`,
+    }));
+    renderMp3(tousLesMp3);
+  } catch(e) {
+    document.getElementById('mp3List').innerHTML = `<div style="padding:20px;text-align:center;color:var(--red);font-size:.8rem;">${e.message}</div>`;
+  }
+}
+
+function filtrerMp3() {
+  const q = document.getElementById('searchMp3').value.toLowerCase();
+  renderMp3(tousLesMp3.filter(f => f.titre.toLowerCase().includes(q)));
+}
+
+function renderMp3(liste) {
+  const el = document.getElementById('mp3List');
+  if (!liste.length) {
+    el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text3);font-size:.8rem;">Aucun résultat</div>';
+    return;
+  }
+  el.innerHTML = liste.map(f => {
+    const dansAlbum = tracklist.some(t => t.nom === f.nom);
+    return `<div class="mp3-item ${dansAlbum ? 'in-album' : ''}" onclick="ajouterPiste('${encodeURIComponent(f.nom)}')">
+      <div class="mp3-thumb">
+        <img src="${f.cover_url}" onerror="this.parentElement.innerHTML='🎵'" loading="lazy" alt="">
+      </div>
+      <div class="mp3-name" title="${f.titre}">${f.titre}</div>
+      <button class="mp3-add-btn" title="Ajouter">+</button>
+    </div>`;
+  }).join('');
+}
+
+// ── AJOUT / SUPPRESSION PISTE ──────────────────────────────────────────────
+
+async function ajouterPiste(nomEncode) {
+  const nom = decodeURIComponent(nomEncode);
+  if (tracklist.some(t => t.nom === nom)) return;
+
+  // Récupérer les tags existants pour pré-remplir artiste/année/genre
+  let tags = { artiste: '', annee: '', genre: '' };
+  try {
+    tags = await api('GET', `/fichiers/${encodeURIComponent(nom)}/tags`);
+  } catch(_) {}
+
+  // Pré-remplir les champs album si vides
+  if (tags.artiste && !document.getElementById('albumArtiste').value)
+    document.getElementById('albumArtiste').value = tags.artiste;
+  if (tags.annee && !document.getElementById('albumAnnee').value)
+    document.getElementById('albumAnnee').value = tags.annee;
+  if (tags.genre && !document.getElementById('albumGenre').value)
+    document.getElementById('albumGenre').value = tags.genre;
+
+  tracklist.push({
+    nom,
+    titre: nom.replace('.mp3',''),
+    artiste: tags.artiste || '',
+    annee: tags.annee || '',
+    genre: tags.genre || '',
+    cover_url: `/api/fichiers/${encodeURIComponent(nom)}/cover`,
+  });
+
+  renderTracklist();
+  renderMp3(tousLesMp3.filter(f =>
+    f.titre.toLowerCase().includes(document.getElementById('searchMp3').value.toLowerCase())
+  ));
+  mettreAJourBouton();
+}
+
+function supprimerPiste(idx) {
+  tracklist.splice(idx, 1);
+  renderTracklist();
+  renderMp3(tousLesMp3.filter(f =>
+    f.titre.toLowerCase().includes(document.getElementById('searchMp3').value.toLowerCase())
+  ));
+  mettreAJourBouton();
+}
+
+function viderTracklist() {
+  tracklist = [];
+  renderTracklist();
+  renderMp3(tousLesMp3);
+  mettreAJourBouton();
+}
+
+// ── RENDU TRACKLIST ─────────────────────────────────────────────────────────
+
+function renderTracklist() {
+  const el = document.getElementById('tracklist');
+  document.getElementById('emptyTracks').style.display = tracklist.length ? 'none' : 'flex';
+  document.getElementById('btnVider').style.display = tracklist.length ? '' : 'none';
+  document.getElementById('tracksCount').textContent =
+    `${tracklist.length} piste(s) — glisser pour réordonner`;
+
+  // Supprimer anciens items (garder empty-tracks)
+  el.querySelectorAll('.track-item').forEach(n => n.remove());
+
+  tracklist.forEach((t, i) => {
+    const div = document.createElement('div');
+    div.className = 'track-item';
+    div.draggable = true;
+    div.dataset.idx = i;
+    div.innerHTML = `
+      <span class="drag-handle">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="9" y1="5" x2="9" y2="19"/><line x1="15" y1="5" x2="15" y2="19"/>
+        </svg>
+      </span>
+      <div class="track-num">${i + 1}</div>
+      <div class="track-cover">
+        <img src="${t.cover_url}" onerror="this.parentElement.innerHTML='🎵'" loading="lazy" alt="">
+      </div>
+      <div class="track-info">
+        <div class="track-title" title="${t.titre}">${t.titre}</div>
+        <div class="track-subtitle">${t.artiste || '—'}</div>
+      </div>
+      <button class="btn btn-icon btn-sm" onclick="deplacerPiste(${i}, -1)" title="Monter" ${i===0?'disabled':''}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>
+      </button>
+      <button class="btn btn-icon btn-sm" onclick="deplacerPiste(${i}, 1)" title="Descendre" ${i===tracklist.length-1?'disabled':''}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <button class="btn btn-danger btn-sm btn-icon" onclick="supprimerPiste(${i})" title="Retirer">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>`;
+
+    div.addEventListener('dragstart', e => { dragSrcIdx = i; div.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; });
+    div.addEventListener('dragend', () => { dragSrcIdx = null; div.classList.remove('dragging'); document.querySelectorAll('.track-item').forEach(d => d.classList.remove('drag-over')); });
+    div.addEventListener('dragover', e => { e.preventDefault(); div.classList.add('drag-over'); });
+    div.addEventListener('dragleave', () => div.classList.remove('drag-over'));
+    div.addEventListener('drop', e => { e.preventDefault(); div.classList.remove('drag-over'); if (dragSrcIdx !== null && dragSrcIdx !== i) deplacerVers(dragSrcIdx, i); });
+
+    el.appendChild(div);
+  });
+}
+
+// ── DÉPLACEMENT ─────────────────────────────────────────────────────────────
+
+function deplacerPiste(idx, dir) {
+  const cible = idx + dir;
+  if (cible < 0 || cible >= tracklist.length) return;
+  [tracklist[idx], tracklist[cible]] = [tracklist[cible], tracklist[idx]];
+  renderTracklist();
+}
+
+function deplacerVers(src, dest) {
+  const item = tracklist.splice(src, 1)[0];
+  tracklist.splice(dest, 0, item);
+  renderTracklist();
+}
+
+function dragOver(e) { e.preventDefault(); }
+function dropOnList(e) { e.preventDefault(); }
+
+// ── COVER PREVIEW ──────────────────────────────────────────────────────────
+
+function previewCover(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const img = document.getElementById('coverPreview');
+    img.src = e.target.result;
+    img.style.display = '';
+    document.getElementById('coverPlaceholder').style.display = 'none';
+  };
+  reader.readAsDataURL(file);
+}
+
+// ── MISE À JOUR BOUTON ──────────────────────────────────────────────────────
+
+function mettreAJourBouton() {
+  const ok = tracklist.length > 0 && document.getElementById('albumNom').value.trim();
+  document.getElementById('btnSave').disabled = !ok;
+  document.getElementById('saveInfo').textContent = !tracklist.length
+    ? 'Ajoutez des pistes pour pouvoir enregistrer'
+    : !document.getElementById('albumNom').value.trim()
+    ? 'Saisissez le nom de l\'album'
+    : `${tracklist.length} piste(s) prête(s) à enregistrer`;
+}
+
+document.getElementById('albumNom').addEventListener('input', mettreAJourBouton);
+
+// ── ENREGISTREMENT ─────────────────────────────────────────────────────────
+
+async function enregistrerAlbum() {
+  const nomAlbum   = document.getElementById('albumNom').value.trim();
+  const artiste    = document.getElementById('albumArtiste').value.trim();
+  const annee      = document.getElementById('albumAnnee').value.trim();
+  const genre      = document.getElementById('albumGenre').value.trim();
+  const numerote   = document.getElementById('optNumerotation').checked;
+  const appCover   = document.getElementById('optCover').checked;
+  const appArtiste = document.getElementById('optArtiste').checked;
+  const coverFile  = document.getElementById('coverInput').files[0];
+  const total      = tracklist.length;
+
+  if (!nomAlbum || !total) return;
+
+  document.getElementById('btnSave').disabled = true;
+  const wrap = document.getElementById('progressWrap');
+  const fill = document.getElementById('progressFill');
+  const lbl  = document.getElementById('progressLabel');
+  wrap.classList.add('visible');
+
+  let ok = 0, err = 0;
+
+  for (let i = 0; i < tracklist.length; i++) {
+    const t = tracklist[i];
+    lbl.textContent = `${i + 1} / ${total} — ${t.titre}`;
+    fill.style.width = `${Math.round((i / total) * 100)}%`;
+
+    try {
+      const fd = new FormData();
+      fd.append('album', nomAlbum);
+      if (appArtiste && artiste) fd.append('artiste', artiste);
+      if (annee) fd.append('annee', annee);
+      if (genre) fd.append('genre', genre);
+      if (numerote) {
+        fd.append('piste', String(i + 1));
+        fd.append('total_pistes', String(total));
+      }
+      if (appCover && coverFile) fd.append('cover', coverFile);
+
+      const r = await fetch(`/api/fichiers/${encodeURIComponent(t.nom)}/tags`, { method: 'POST', body: fd });
+      if (!r.ok) throw new Error((await r.json().catch(()=>({}))).detail || r.statusText);
+      ok++;
+    } catch(e) {
+      err++;
+      console.error(t.nom, e.message);
+    }
+  }
+
+  fill.style.width = '100%';
+  lbl.textContent = `Terminé : ${ok} mise(s) à jour${err ? `, ${err} erreur(s)` : ''}`;
+
+  if (err === 0) toast(`Album "${nomAlbum}" enregistré — ${ok} pistes mises à jour ✓`, 'success', 5000);
+  else toast(`${ok} ok, ${err} erreur(s)`, 'error', 5000);
+
+  document.getElementById('btnSave').disabled = false;
+}
+
+// ── INIT ───────────────────────────────────────────────────────────────────
+
+chargerMp3();
+</script>
+</body>
+</html>
