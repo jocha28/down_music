@@ -93,35 +93,35 @@ async def configurer_via_cookie(body: dict, request: Request):
     except Exception:
         raise HTTPException(status_code=400, detail="Cookie base64 invalide")
 
-    access_token   = (_re.search(r'"access_token":"([^"]+)"', decoded) or _re.Match()).group(1) if _re.search(r'"access_token":"([^"]+)"', decoded) else ""
-    refresh_token_ = (_re.search(r'"refresh_token":"([^"]+)"', decoded) or _re.Match()).group(1) if _re.search(r'"refresh_token":"([^"]+)"', decoded) else ""
+    m_at = _re.search(r'"access_token":"([^"]+)"', decoded)
+    m_rt = _re.search(r'"refresh_token":"([^"]+)"', decoded)
+    access_token   = m_at.group(1) if m_at else ""
+    refresh_token_ = m_rt.group(1) if m_rt else ""
 
-    if not access_token:
-        raise HTTPException(status_code=400, detail="access_token introuvable dans le cookie")
+    if not refresh_token_:
+        raise HTTPException(status_code=400, detail="refresh_token introuvable dans le cookie")
 
-    # Vérifier l'expiration
+    # Toujours rafraîchir via refresh_token pour obtenir un token propre
+    # (le token du cookie peut avoir une signature invalide pour PostgREST)
+    import httpx as _httpx
     try:
-        parts = access_token.split(".")
-        p = parts[1].replace("-", "+").replace("_", "/")
-        p += "=" * (4 - len(p) % 4)
-        import json as _json
-        payload = _json.loads(base64.b64decode(p))
-        exp = payload.get("exp", 0)
-        if exp < time.time():
-            # Token expiré — tenter de le rafraîchir via refresh_token
-            if refresh_token_:
-                from main import _rafraichir_token
-                request.app.state.token         = access_token
-                request.app.state.refresh_token = refresh_token_
-                await _rafraichir_token(request.app)
-                access_token   = request.app.state.token
-                refresh_token_ = request.app.state.refresh_token
+        async with _httpx.AsyncClient(timeout=15) as hclient:
+            r = await hclient.post(
+                "https://db.sonauto.ai/auth/v1/token?grant_type=refresh_token",
+                headers={"Content-Type": "application/json",
+                         "apikey": "sb_publishable_Ap6tbqA6iU0D4uuvjB5v0A_C0paifNR"},
+                json={"refresh_token": refresh_token_},
+            )
+            if r.status_code == 200:
+                data = r.json()
+                access_token   = data["access_token"]
+                refresh_token_ = data["refresh_token"]
             else:
-                raise HTTPException(status_code=401, detail="Token expiré et pas de refresh_token disponible")
+                raise HTTPException(status_code=401, detail=f"Refresh échoué: {r.text[:200]}")
     except HTTPException:
         raise
-    except Exception:
-        pass
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur refresh: {e}")
 
     # Sauvegarder
     request.app.state.token         = access_token
