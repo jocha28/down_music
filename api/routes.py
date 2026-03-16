@@ -1,0 +1,269 @@
+"""
+Routes FastAPI — toutes les routes de l'application.
+"""
+from __future__ import annotations
+
+import asyncio
+import json
+from pathlib import Path
+from typing import AsyncGenerator
+
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import FileResponse, StreamingResponse
+
+from .modeles import (
+    ConfigToken, ReponseTelechargement,
+    Son, ProgressionTelechargement, StatutTelecharge,
+)
+from .client_sonauto import ClientSonauto
+from . import service_telechargement as svc
+
+router = APIRouter()
+
+DOSSIER_MUSIQUES = Path("musiques")
+
+
+# ── Utilitaire token ──────────────────────────────────────────────────────────
+
+def _token(request: Request) -> str:
+    token = getattr(request.app.state, "token", None)
+    if not token:
+        raise HTTPException(
+            status_code=401,
+            detail="Token non configuré — POST /config/token d'abord"
+        )
+    return token
+
+
+# ── Santé ─────────────────────────────────────────────────────────────────────
+
+@router.get("/sante", tags=["Système"], summary="Vérification de l'état de l'API")
+async def sante(request: Request):
+    return {
+        "statut":       "en ligne",
+        "token_defini": bool(getattr(request.app.state, "token", None)),
+        "musiques_dir": str(DOSSIER_MUSIQUES.resolve()),
+    }
+
+
+# ── Configuration ─────────────────────────────────────────────────────────────
+
+@router.post("/config/token", tags=["Configuration"], summary="Définir le token Sonauto.ai")
+async def definir_token(body: ConfigToken, request: Request):
+    token = body.token.removeprefix("Bearer ").strip()
+    request.app.state.token = token
+
+    # Persister dans .config_sonauto.json
+    config_path = Path(".config_sonauto.json")
+    config_path.write_text(json.dumps({"token": token}, indent=2))
+    config_path.chmod(0o600)
+
+    return {"message": "Token enregistré avec succès"}
+
+
+@router.get("/config/token", tags=["Configuration"], summary="Vérifier si un token est configuré")
+async def verifier_token(request: Request):
+    token = getattr(request.app.state, "token", None)
+    return {
+        "token_defini": bool(token),
+        "apercu": (f"{token[:8]}..." if token else None),
+    }
+
+
+# ── Sons likés ────────────────────────────────────────────────────────────────
+
+@router.get(
+    "/sons",
+    response_model=list[Son],
+    tags=["Sons"],
+    summary="Lister tous les sons likés",
+)
+async def lister_sons(request: Request) -> list[Son]:
+    async with ClientSonauto(_token(request)) as client:
+        try:
+            return await client.lister_sons_likes()
+        except PermissionError as e:
+            raise HTTPException(status_code=401, detail=str(e))
+
+
+@router.get(
+    "/sons/{generation_id}",
+    response_model=Son,
+    tags=["Sons"],
+    summary="Obtenir les détails d'un son par son ID",
+)
+async def obtenir_son(generation_id: str, request: Request) -> Son:
+    async with ClientSonauto(_token(request)) as client:
+        son = await client.obtenir_son(generation_id)
+    if not son:
+        raise HTTPException(status_code=404, detail="Son non trouvé")
+    return son
+
+
+# ── Téléchargements ───────────────────────────────────────────────────────────
+
+@router.post(
+    "/telecharger/{generation_id}",
+    response_model=ReponseTelechargement,
+    tags=["Téléchargements"],
+    summary="Télécharger un son par son ID",
+)
+async def telecharger_son(generation_id: str, request: Request):
+    token = _token(request)
+    async with ClientSonauto(token) as client:
+        son = await client.obtenir_son(generation_id)
+    if not son:
+        raise HTTPException(status_code=404, detail="Son non trouvé")
+
+    tache_id = await svc.lancer_telechargement(son, token)
+    return ReponseTelechargement(
+        tache_id=tache_id,
+        message=f"Téléchargement lancé pour « {son.titre} »",
+    )
+
+
+@router.post(
+    "/telecharger/url",
+    response_model=ReponseTelechargement,
+    tags=["Téléchargements"],
+    summary="Télécharger via l'URL de l'éditeur Sonauto",
+)
+async def telecharger_par_url(body: dict, request: Request):
+    import re
+    url = body.get("url", "")
+    m   = re.search(r'/editor/([^/]+)/([^/?]+)', url)
+    if not m:
+        raise HTTPException(status_code=400, detail="URL non reconnue")
+    generation_id = m.group(2)
+    return await telecharger_son(generation_id, request)
+
+
+@router.post(
+    "/telecharger/tous",
+    response_model=list[ReponseTelechargement],
+    tags=["Téléchargements"],
+    summary="Télécharger tous les sons likés",
+)
+async def telecharger_tous(request: Request):
+    token = _token(request)
+    async with ClientSonauto(token) as client:
+        sons = await client.lister_sons_likes()
+
+    if not sons:
+        raise HTTPException(status_code=404, detail="Aucun son liké trouvé")
+
+    tache_ids = await svc.lancer_tous(sons, token)
+    return [
+        ReponseTelechargement(
+            tache_id=tid,
+            message=f"Téléchargement lancé pour « {son.titre} »"
+        )
+        for tid, son in zip(tache_ids, sons)
+    ]
+
+
+# ── Suivi des tâches ──────────────────────────────────────────────────────────
+
+@router.get(
+    "/taches",
+    response_model=list[ProgressionTelechargement],
+    tags=["Tâches"],
+    summary="Lister toutes les tâches de téléchargement",
+)
+async def lister_taches():
+    return list(svc.obtenir_taches().values())
+
+
+@router.get(
+    "/taches/{tache_id}",
+    response_model=ProgressionTelechargement,
+    tags=["Tâches"],
+    summary="Obtenir la progression d'une tâche",
+)
+async def obtenir_tache(tache_id: str):
+    tache = svc.obtenir_tache(tache_id)
+    if not tache:
+        raise HTTPException(status_code=404, detail="Tâche non trouvée")
+    return tache
+
+
+@router.get(
+    "/taches/{tache_id}/flux",
+    tags=["Tâches"],
+    summary="Progression en temps réel (Server-Sent Events)",
+)
+async def flux_progression(tache_id: str):
+    """
+    Stream SSE : envoie la progression toutes les 500ms jusqu'à la fin.
+    Connectez-vous avec : EventSource('/taches/{id}/flux')
+    """
+    async def generateur() -> AsyncGenerator[str, None]:
+        while True:
+            tache = svc.obtenir_tache(tache_id)
+            if not tache:
+                yield f"data: {json.dumps({'erreur': 'Tâche non trouvée'})}\n\n"
+                break
+            yield f"data: {tache.model_dump_json()}\n\n"
+            if tache.statut in (
+                StatutTelecharge.TERMINE,
+                StatutTelecharge.ERREUR,
+                StatutTelecharge.DEJA_PRESENT,
+            ):
+                break
+            await asyncio.sleep(0.5)
+
+    return StreamingResponse(
+        generateur(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+# ── Fichiers téléchargés ──────────────────────────────────────────────────────
+
+@router.get(
+    "/fichiers",
+    tags=["Fichiers"],
+    summary="Lister les fichiers téléchargés",
+)
+async def lister_fichiers():
+    if not DOSSIER_MUSIQUES.exists():
+        return []
+    return [
+        {
+            "nom":    f.name,
+            "taille": f.stat().st_size,
+            "url":    f"/fichiers/{f.name}",
+            "lyrics": f.with_suffix(".lrc").exists(),
+        }
+        for f in sorted(DOSSIER_MUSIQUES.glob("*.mp3"))
+    ]
+
+
+@router.get(
+    "/fichiers/{nom_fichier}",
+    tags=["Fichiers"],
+    summary="Télécharger un fichier MP3",
+)
+async def servir_fichier(nom_fichier: str):
+    chemin = DOSSIER_MUSIQUES / nom_fichier
+    if not chemin.exists() or not chemin.is_file():
+        raise HTTPException(status_code=404, detail="Fichier non trouvé")
+    return FileResponse(
+        path=chemin,
+        media_type="audio/mpeg",
+        filename=nom_fichier,
+    )
+
+
+@router.get(
+    "/fichiers/{nom_fichier}/lyrics",
+    tags=["Fichiers"],
+    summary="Obtenir les lyrics d'un fichier",
+)
+async def obtenir_lyrics(nom_fichier: str):
+    base    = Path(nom_fichier).stem
+    chemin  = DOSSIER_MUSIQUES / f"{base}.lrc"
+    if not chemin.exists():
+        raise HTTPException(status_code=404, detail="Lyrics non disponibles")
+    return {"lyrics": chemin.read_text(encoding="utf-8")}
