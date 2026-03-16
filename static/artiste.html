@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Profil artiste — Sonauto Downloader</title>
+<style>
+  :root {
+    --bg: #0a0a0f; --bg2: #12121a; --bg3: #1a1a26;
+    --border: #2a2a3d; --accent: #7c3aed; --accent2: #a855f7;
+    --green: #1db954; --red: #ef4444;
+    --text: #e2e8f0; --text2: #94a3b8; --text3: #64748b;
+    --radius: 12px; --radius-sm: 8px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; min-height: 100vh; overflow-x: hidden; }
+
+  /* ── NAV ── */
+  .nav {
+    position: fixed; top: 0; left: 0; right: 0; height: 64px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 32px; z-index: 200; background: transparent; transition: background .3s;
+  }
+  .nav.scrolled { background: rgba(10,10,15,.92); backdrop-filter: blur(20px); border-bottom: 1px solid var(--border); }
+  .nav-left { display: flex; align-items: center; gap: 10px; }
+  .nav-btn { width: 32px; height: 32px; border-radius: 50%; background: rgba(0,0,0,.4); border: none; color: var(--text2); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all .15s; }
+  .nav-btn:hover { background: rgba(255,255,255,.1); color: var(--text); }
+  .nav-title { font-weight: 700; font-size: .95rem; opacity: 0; transition: opacity .3s; }
+  .nav.scrolled .nav-title { opacity: 1; }
+  .nav-link { font-size: .8rem; color: var(--text3); text-decoration: none; padding: 6px 14px; border: 1px solid var(--border); border-radius: 99px; transition: all .15s; }
+  .nav-link:hover { color: var(--text); border-color: var(--text3); }
+
+  /* ── HERO ── */
+  .hero { position: relative; min-height: 380px; display: flex; align-items: flex-end; padding: 0 32px 28px; overflow: hidden; }
+  .hero-bg { position: absolute; inset: 0; background-size: cover; background-position: center top; filter: blur(60px) brightness(.35) saturate(1.5); transform: scale(1.1); }
+  .hero-gradient { position: absolute; inset: 0; background: linear-gradient(transparent 15%, rgba(10,10,15,.55) 65%, var(--bg) 100%); }
+  .hero-content { position: relative; display: flex; align-items: flex-end; gap: 28px; width: 100%; }
+
+  .artist-avatar {
+    width: 190px; height: 190px; border-radius: 50%; flex-shrink: 0;
+    box-shadow: 0 8px 48px rgba(0,0,0,.7);
+    background: linear-gradient(135deg, var(--accent) 0%, #1e1b4b 100%);
+    display: flex; align-items: center; justify-content: center; font-size: 4.5rem;
+    overflow: hidden; cursor: pointer; position: relative;
+  }
+  .artist-avatar img { width: 100%; height: 100%; object-fit: cover; position: absolute; inset: 0; }
+  .avatar-overlay { position: absolute; inset: 0; border-radius: 50%; background: rgba(0,0,0,.5); display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity .2s; }
+  .artist-avatar:hover .avatar-overlay { opacity: 1; }
+
+  .artist-meta { flex: 1; min-width: 0; padding-bottom: 4px; }
+  .verified { display: inline-flex; align-items: center; gap: 5px; font-size: .72rem; font-weight: 600; color: var(--accent2); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 10px; }
+  .artist-name { font-size: clamp(2.4rem, 5.5vw, 5rem); font-weight: 900; line-height: 1.05; letter-spacing: -.02em; margin-bottom: 14px; text-shadow: 0 2px 24px rgba(0,0,0,.6); }
+  .artist-stats { display: flex; align-items: center; gap: 14px; font-size: .875rem; color: var(--text2); flex-wrap: wrap; }
+  .sdot { width: 3px; height: 3px; border-radius: 50%; background: var(--text3); flex-shrink: 0; }
+
+  /* ── ACTIONS ── */
+  .artist-actions { padding: 24px 32px 0; display: flex; align-items: center; gap: 20px; }
+  .play-btn { width: 56px; height: 56px; border-radius: 50%; background: var(--green); border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: transform .15s, filter .15s; box-shadow: 0 4px 20px rgba(29,185,84,.4); }
+  .play-btn:hover { transform: scale(1.06); filter: brightness(1.1); }
+  .play-btn svg { margin-left: 2px; }
+  .follow-btn { padding: 9px 24px; border-radius: 99px; border: 1px solid var(--text3); background: transparent; color: var(--text); font-size: .875rem; font-weight: 600; cursor: pointer; transition: all .15s; }
+  .follow-btn:hover { border-color: var(--text); }
+  .follow-btn.on { color: var(--green); border-color: var(--green); }
+
+  /* ── TABS ── */
+  .tabs-bar { display: flex; padding: 8px 32px 0; border-bottom: 1px solid var(--border); margin-top: 18px; }
+  .tab { padding: 12px 20px; font-size: .875rem; font-weight: 600; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; color: var(--text3); transition: all .15s; }
+  .tab.active { color: var(--text); border-bottom-color: var(--text); }
+  .tab:hover:not(.active) { color: var(--text2); }
+
+  /* ── CONTENU ── */
+  .content { padding: 32px; }
+  .section-title { font-size: 1.4rem; font-weight: 700; margin-bottom: 20px; }
+
+  /* ── TABLE SONS ── */
+  .songs-table { width: 100%; border-collapse: collapse; }
+  .songs-table thead th { padding: 8px 16px; text-align: left; font-size: .7rem; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--text3); border-bottom: 1px solid var(--border); }
+  .songs-table thead th.right { text-align: right; }
+  .song-row { cursor: default; }
+  .song-row:hover { background: rgba(255,255,255,.05); }
+  .song-row td { padding: 9px 16px; vertical-align: middle; }
+  .song-row .num { width: 36px; text-align: right; color: var(--text3); font-size: .9rem; font-variant-numeric: tabular-nums; }
+  .song-row .play-icon { display: none; width: 36px; text-align: right; }
+  .song-row:hover .num { display: none; }
+  .song-row:hover .play-icon { display: table-cell; }
+  .song-row.playing .num, .song-row.playing .song-title-text { color: var(--green); }
+  .song-cell { display: flex; align-items: center; gap: 12px; }
+  .sthumb { width: 42px; height: 42px; border-radius: 4px; background: var(--bg3); overflow: hidden; display: flex; align-items: center; justify-content: center; font-size: 1rem; flex-shrink: 0; }
+  .sthumb img { width: 100%; height: 100%; object-fit: cover; }
+  .song-title-text { font-size: .875rem; font-weight: 500; }
+  .song-meta-text { font-size: .75rem; color: var(--text3); margin-top: 2px; }
+  .sduration { font-size: .8rem; color: var(--text3); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .salb { font-size: .82rem; color: var(--text3); }
+  .like-btn { background: none; border: none; cursor: pointer; color: var(--text3); padding: 4px; opacity: 0; transition: opacity .15s, color .15s; }
+  .song-row:hover .like-btn { opacity: 1; }
+  .like-btn.on { color: var(--green); opacity: 1; }
+
+  /* ── GRID ALBUMS ── */
+  .albums-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 18px; }
+  .album-card { background: var(--bg2); border-radius: var(--radius); padding: 16px; cursor: pointer; transition: background .15s; }
+  .album-card:hover { background: var(--bg3); }
+  .album-cover { width: 100%; aspect-ratio: 1; border-radius: 8px; background: var(--bg3); overflow: hidden; display: flex; align-items: center; justify-content: center; font-size: 2.5rem; margin-bottom: 14px; box-shadow: 0 4px 20px rgba(0,0,0,.4); position: relative; }
+  .album-cover img { width: 100%; height: 100%; object-fit: cover; position: absolute; inset: 0; }
+  .album-play { position: absolute; bottom: 8px; right: 8px; width: 42px; height: 42px; border-radius: 50%; background: var(--green); display: flex; align-items: center; justify-content: center; opacity: 0; transform: translateY(8px); transition: opacity .2s, transform .2s; border: none; cursor: pointer; box-shadow: 0 4px 16px rgba(0,0,0,.4); }
+  .album-card:hover .album-play { opacity: 1; transform: translateY(0); }
+  .album-name { font-size: .875rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .album-year { font-size: .75rem; color: var(--text3); margin-top: 4px; }
+
+  /* ── À PROPOS ── */
+  .about-card { background: var(--bg2); border-radius: var(--radius); padding: 24px; max-width: 580px; }
+  .about-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 20px; border-top: 1px solid var(--border); padding-top: 20px; }
+  .about-item-label { font-size: .7rem; text-transform: uppercase; letter-spacing: .08em; color: var(--text3); margin-bottom: 4px; }
+  .about-item-val { font-size: .95rem; font-weight: 600; }
+
+  /* ── SÉLECTEUR ── */
+  .picker { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 90vh; gap: 20px; padding: 40px; }
+  .picker h1 { font-size: 1.5rem; font-weight: 700; }
+  .picker-grid { display: flex; flex-wrap: wrap; gap: 16px; justify-content: center; max-width: 840px; }
+  .pick-card { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 20px; background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer; transition: all .15s; width: 160px; }
+  .pick-card:hover { border-color: var(--accent2); background: var(--bg3); }
+  .pick-ava { width: 80px; height: 80px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), #1e1b4b); display: flex; align-items: center; justify-content: center; font-size: 2rem; overflow: hidden; }
+  .pick-ava img { width: 100%; height: 100%; object-fit: cover; }
+  .pick-name { font-weight: 600; font-size: .875rem; text-align: center; }
+  .pick-count { font-size: .72rem; color: var(--text3); }
+
+  /* ── MINI PLAYER ── */
+  .player-bar { position: fixed; bottom: 0; left: 0; right: 0; background: linear-gradient(var(--bg2), #0d0d14); border-top: 1px solid var(--border); padding: 14px 28px; display: none; align-items: center; gap: 20px; z-index: 300; }
+  .player-bar.on { display: flex; }
+  .player-thumb { width: 52px; height: 52px; border-radius: 4px; background: var(--bg3); overflow: hidden; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; }
+  .player-thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .player-info { width: 190px; min-width: 0; }
+  .player-title { font-size: .875rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .player-artist { font-size: .75rem; color: var(--text3); }
+  .player-center { flex: 1; display: flex; align-items: center; }
+  audio { width: 100%; max-width: 520px; accent-color: var(--green); height: 36px; }
+  .player-close { background: none; border: none; color: var(--text3); cursor: pointer; padding: 6px; transition: color .15s; }
+  .player-close:hover { color: var(--text); }
+
+  /* ── TOAST ── */
+  #toasts { position: fixed; bottom: 84px; right: 24px; display: flex; flex-direction: column; gap: 8px; z-index: 400; }
+  .toast { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 16px; font-size: .85rem; max-width: 300px; animation: sIn .2s; }
+  .toast.success { border-color: var(--green); }
+  .toast.error { border-color: var(--red); }
+  @keyframes sIn { from { transform: translateX(100%); opacity: 0; } to { transform: none; opacity: 1; } }
+
+  .spin { animation: sp .8s linear infinite; display: inline-block; }
+  @keyframes sp { to { transform: rotate(360deg); } }
+
+  @media (max-width: 680px) {
+    .hero { padding: 0 16px 24px; }
+    .hero-content { flex-direction: column; align-items: flex-start; }
+    .artist-avatar { width: 120px; height: 120px; }
+    .artist-name { font-size: 2.2rem; }
+    .artist-actions, .tabs-bar { padding-left: 16px; padding-right: 16px; }
+    .content { padding: 16px; }
+    .player-info { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav" id="mainNav">
+  <div class="nav-left">
+    <button class="nav-btn" onclick="history.back()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+    </button>
+    <button class="nav-btn" onclick="history.forward()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+    </button>
+  </div>
+  <span class="nav-title" id="navTitle"></span>
+  <a href="/static/editeur.html" class="nav-link">Éditeur</a>
+</nav>
+
+<!-- SÉLECTEUR -->
+<div class="picker" id="picker" style="display:none">
+  <h1>Choisir un artiste</h1>
+  <div class="picker-grid" id="pickerGrid"><div class="spin">⟳</div></div>
+</div>
+
+<!-- PROFIL -->
+<div id="profile" style="display:none; padding-bottom:90px">
+
+  <div class="hero" id="hero">
+    <div class="hero-bg" id="heroBg"></div>
+    <div class="hero-gradient"></div>
+    <div class="hero-content">
+      <div class="artist-avatar" id="artistAvatar" onclick="document.getElementById('avaInput').click()" title="Changer la photo">
+        <span id="avaEmoji">🎤</span>
+        <img id="avaImg" style="display:none" alt="">
+        <div class="avatar-overlay">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        </div>
+      </div>
+      <input type="file" id="avaInput" accept="image/*" style="display:none" onchange="changerAvatar(this)">
+      <div class="artist-meta">
+        <div class="verified">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+          Artiste vérifié
+        </div>
+        <div class="artist-name" id="heroName">–</div>
+        <div class="artist-stats">
+          <span id="statSons">–</span>
+          <div class="sdot"></div>
+          <span id="statAlbums">–</span>
+          <div class="sdot"></div>
+          <span id="statGenre">–</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="artist-actions">
+    <button class="play-btn" onclick="jouerTout()" title="Tout lire">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+    </button>
+    <button class="follow-btn" id="followBtn" onclick="this.classList.toggle('on');this.textContent=this.classList.contains('on')?'Suivi(e)':'Suivre'">Suivre</button>
+  </div>
+
+  <div class="tabs-bar">
+    <div class="tab active" onclick="switchTab('sons',this)">Sons populaires</div>
+    <div class="tab" onclick="switchTab('albums',this)">Discographie</div>
+    <div class="tab" onclick="switchTab('apropos',this)">À propos</div>
+  </div>
+
+  <div class="content">
+
+    <!-- SONS -->
+    <div id="tabSons">
+      <table class="songs-table">
+        <thead><tr>
+          <th style="width:40px">#</th>
+          <th>Titre</th>
+          <th>Album</th>
+          <th class="right"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></th>
+        </tr></thead>
+        <tbody id="sonsTbody"></tbody>
+      </table>
+      <div id="voirPlusWrap" style="text-align:center;margin-top:16px;display:none">
+        <button onclick="voirTout()" style="background:none;border:1px solid var(--border);color:var(--text3);padding:8px 24px;border-radius:99px;cursor:pointer;font-size:.8rem;font-weight:600;" onmouseover="this.style.borderColor=this.style.color='var(--text)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text3)'">Voir tout</button>
+      </div>
+    </div>
+
+    <!-- ALBUMS -->
+    <div id="tabAlbums" style="display:none">
+      <div class="section-title">Discographie</div>
+      <div id="albumsGrid" class="albums-grid" style="margin-top:0"></div>
+      <div id="noAlbums" style="display:none;text-align:center;padding:48px;color:var(--text3)">
+        Aucun album — <a href="/static/album.html" style="color:var(--accent2);font-weight:600;text-decoration:none">créer un album →</a>
+      </div>
+    </div>
+
+    <!-- À PROPOS -->
+    <div id="tabApropos" style="display:none">
+      <div class="about-card">
+        <div style="display:flex;align-items:center;gap:14px">
+          <div style="font-size:2.5rem">🎤</div>
+          <div>
+            <div style="font-weight:700;font-size:1.1rem" id="aboutName">–</div>
+            <div style="font-size:.8rem;color:var(--text3);margin-top:3px" id="aboutSub">–</div>
+          </div>
+        </div>
+        <div class="about-grid" id="aboutGrid"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- MINI PLAYER -->
+<div class="player-bar" id="playerBar">
+  <div class="player-thumb" id="playerThumb">🎵</div>
+  <div class="player-info">
+    <div class="player-title" id="playerTitle">–</div>
+    <div class="player-artist" id="playerArtist">–</div>
+  </div>
+  <div class="player-center">
+    <audio id="audio" controls></audio>
+  </div>
+  <button class="player-close" onclick="stopPlayer()">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+  </button>
+</div>
+
+<div id="toasts"></div>
+
+<script>
+const API = '';
+let data = null;      // { nom, sons, albums }
+let sons = [];
+let shown = 10;
+let playIdx = -1;
+
+// ── UTILS ──────────────────────────────────────────────────────────────────
+
+function toast(msg, type='info') {
+  const el = document.createElement('div');
+  el.className = `toast ${type}`; el.textContent = msg;
+  document.getElementById('toasts').appendChild(el);
+  setTimeout(() => el.remove(), 3000);
+}
+
+async function get(path) {
+  const r = await fetch(API + '/api' + path);
+  if (!r.ok) throw new Error(r.statusText);
+  return r.json();
+}
+
+function dur(s) {
+  if (!s) return '–';
+  return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
+}
+
+// ── SCROLL ─────────────────────────────────────────────────────────────────
+
+window.addEventListener('scroll', () =>
+  document.getElementById('mainNav').classList.toggle('scrolled', scrollY > 280)
+);
+
+// ── SÉLECTEUR ──────────────────────────────────────────────────────────────
+
+async function showPicker() {
+  document.getElementById('picker').style.display = 'flex';
+  try {
+    const artistes = await get('/artistes');
+    const el = document.getElementById('pickerGrid');
+    if (!artistes.length) {
+      el.innerHTML = '<p style="color:var(--text3)">Aucun artiste trouvé — définissez l\'artiste dans l\'éditeur de tags.</p>';
+      return;
+    }
+    el.innerHTML = artistes.map(a => {
+      const cover = a.cover_exemple ? `/api/fichiers/${encodeURIComponent(a.cover_exemple)}/cover` : '';
+      return `<div class="pick-card" onclick="load('${encodeURIComponent(a.nom)}')">
+        <div class="pick-ava">${cover ? `<img src="${cover}" onerror="this.parentElement.innerHTML='🎤'" alt="">` : '🎤'}</div>
+        <div class="pick-name">${a.nom}</div>
+        <div class="pick-count">${a.nb_sons} sons · ${a.nb_albums} albums</div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    document.getElementById('pickerGrid').innerHTML = `<span style="color:var(--red)">${e.message}</span>`;
+  }
+}
+
+// ── CHARGEMENT ─────────────────────────────────────────────────────────────
+
+async function load(nomEnc) {
+  const nom = decodeURIComponent(nomEnc);
+  document.getElementById('picker').style.display = 'none';
+  document.getElementById('profile').style.display = 'block';
+  document.getElementById('heroName').textContent = '⟳';
+  try {
+    data = await get(`/artistes/${encodeURIComponent(nom)}/profil`);
+    sons = data.sons;
+    render();
+    history.replaceState(null, '', `?artiste=${encodeURIComponent(nom)}`);
+  } catch(e) { toast('Erreur : ' + e.message, 'error'); }
+}
+
+function render() {
+  const { nom, sons: s, albums } = data;
+
+  // Hero
+  document.getElementById('heroName').textContent = nom;
+  document.getElementById('navTitle').textContent = nom;
+  document.title = nom + ' — Sonauto Downloader';
+
+  const avecCover = s.find(x => x.cover_url);
+  if (avecCover) {
+    document.getElementById('heroBg').style.backgroundImage = `url('${avecCover.cover_url}')`;
+    const img = document.getElementById('avaImg');
+    img.src = avecCover.cover_url;
+    img.style.display = '';
+    document.getElementById('avaEmoji').style.display = 'none';
+  }
+
+  const genres = [...new Set(s.map(x => x.genre).filter(Boolean))];
+  document.getElementById('statSons').textContent   = `${s.length} sons`;
+  document.getElementById('statAlbums').textContent = `${albums.length} album${albums.length!==1?'s':''}`;
+  document.getElementById('statGenre').textContent  = genres.slice(0,3).join(', ') || 'Genre non défini';
+
+  // À propos
+  document.getElementById('aboutName').textContent = nom;
+  document.getElementById('aboutSub').textContent  = `${s.length} sons · ${albums.length} albums`;
+  const annees = [...new Set(s.map(x=>x.annee).filter(Boolean))].sort();
+  document.getElementById('aboutGrid').innerHTML = [
+    ['Premier son', annees[0]||'–'], ['Dernier son', annees[annees.length-1]||'–'],
+    ['Albums', albums.length||'–'], ['Genres', genres.slice(0,2).join(', ')||'–'],
+  ].map(([l,v]) => `<div><div class="about-item-label">${l}</div><div class="about-item-val">${v}</div></div>`).join('');
+
+  renderSons();
+  renderAlbums();
+}
+
+// ── SONS ────────────────────────────────────────────────────────────────────
+
+function renderSons(liste) {
+  liste = liste || sons.slice(0, shown);
+  document.getElementById('voirPlusWrap').style.display = (!liste || sons.length > shown) ? '' : 'none';
+  document.getElementById('sonsTbody').innerHTML = liste.map((s, i) => `
+    <tr class="song-row${playIdx === i ? ' playing' : ''}" data-i="${i}">
+      <td class="num">${i+1}</td>
+      <td class="play-icon" onclick="play(${i})" style="cursor:pointer">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      </td>
+      <td ondblclick="play(${i})">
+        <div class="song-cell">
+          <div class="sthumb">${s.cover_url?`<img src="${s.cover_url}" onerror="this.parentElement.innerHTML='🎵'" loading="lazy" alt="">`:'🎵'}</div>
+          <div>
+            <div class="song-title-text">${s.titre}</div>
+            ${s.artiste?`<div class="song-meta-text">${s.artiste}</div>`:''}
+          </div>
+        </div>
+      </td>
+      <td class="salb">${s.album||'–'}</td>
+      <td>
+        <div style="display:flex;align-items:center;justify-content:flex-end;gap:10px">
+          <button class="like-btn" onclick="this.classList.toggle('on')">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+          </button>
+          <span class="sduration">${dur(s.duree)}</span>
+        </div>
+      </td>
+    </tr>`).join('');
+}
+
+function voirTout() { shown = sons.length; renderSons(); }
+
+// ── ALBUMS ──────────────────────────────────────────────────────────────────
+
+function renderAlbums() {
+  const albums = data.albums;
+  const grid = document.getElementById('albumsGrid');
+  if (!albums.length) { grid.style.display='none'; document.getElementById('noAlbums').style.display=''; return; }
+  document.getElementById('noAlbums').style.display = 'none';
+  grid.style.display = '';
+  grid.innerHTML = albums.map((a, i) => `
+    <div class="album-card" onclick="filtreAlbum('${encodeURIComponent(a.titre)}')">
+      <div class="album-cover">
+        ${a.cover?`<img src="${a.cover}" onerror="this.parentElement.innerHTML='💿'" loading="lazy" alt="">`:'💿'}
+        <button class="album-play" onclick="event.stopPropagation();playAlbum(${i})">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        </button>
+      </div>
+      <div class="album-name" title="${a.titre}">${a.titre}</div>
+      <div class="album-year">${a.annee||''} · ${a.pistes.length} piste${a.pistes.length!==1?'s':''}</div>
+    </div>`).join('');
+}
+
+function filtreAlbum(albEnc) {
+  const alb = decodeURIComponent(albEnc);
+  switchTab('sons', document.querySelector('.tab'));
+  const filtres = sons.filter(s => s.album === alb);
+  renderSons(filtres);
+  document.getElementById('voirPlusWrap').style.display = 'none';
+}
+
+// ── LECTURE ──────────────────────────────────────────────────────────────────
+
+function play(i) {
+  const s = sons[i]; if (!s) return;
+  playIdx = i;
+  const audio = document.getElementById('audio');
+  audio.src = s.audio_url;
+  document.getElementById('playerTitle').textContent  = s.titre;
+  document.getElementById('playerArtist').textContent = s.artiste || '–';
+  const th = document.getElementById('playerThumb');
+  th.innerHTML = s.cover_url ? `<img src="${s.cover_url}" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML='🎵'" alt="">` : '🎵';
+  document.getElementById('playerBar').classList.add('on');
+  audio.play();
+  // Surligner la ligne active
+  document.querySelectorAll('.song-row').forEach(r => r.classList.remove('playing'));
+  const row = document.querySelector(`.song-row[data-i="${i}"]`);
+  if (row) row.classList.add('playing');
+}
+
+function playAlbum(i) {
+  const pistes = data.albums[i]?.pistes;
+  if (!pistes?.length) return;
+  const idx = sons.findIndex(s => s.nom === pistes[0].nom);
+  if (idx >= 0) play(idx);
+}
+
+function jouerTout() { if (sons.length) play(0); }
+
+function stopPlayer() {
+  document.getElementById('audio').pause();
+  document.getElementById('playerBar').classList.remove('on');
+}
+
+// Enchaîner automatiquement
+document.getElementById('audio').addEventListener('ended', () => {
+  if (playIdx >= 0 && playIdx < sons.length - 1) play(playIdx + 1);
+});
+
+// ── TABS ─────────────────────────────────────────────────────────────────────
+
+function switchTab(id, el) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  const tabs = ['sons','albums','apropos'];
+  const clickedEl = el || document.querySelectorAll('.tab')[tabs.indexOf(id)];
+  if (clickedEl) clickedEl.classList.add('active');
+  tabs.forEach(t => document.getElementById('tab' + t.charAt(0).toUpperCase() + t.slice(1)).style.display = t === id ? '' : 'none');
+  if (id === 'sons') { shown = 10; renderSons(); }
+}
+
+// ── AVATAR ──────────────────────────────────────────────────────────────────
+
+function changerAvatar(input) {
+  const file = input.files[0]; if (!file) return;
+  const r = new FileReader();
+  r.onload = e => {
+    document.getElementById('avaImg').src = e.target.result;
+    document.getElementById('avaImg').style.display = '';
+    document.getElementById('avaEmoji').style.display = 'none';
+    document.getElementById('heroBg').style.backgroundImage = `url('${e.target.result}')`;
+  };
+  r.readAsDataURL(file);
+}
+
+// ── INIT ─────────────────────────────────────────────────────────────────────
+
+const params = new URLSearchParams(location.search);
+const artParam = params.get('artiste');
+if (artParam) load(artParam); else showPicker();
+</script>
+</body>
+</html>

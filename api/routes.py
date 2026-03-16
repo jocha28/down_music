@@ -367,6 +367,203 @@ async def debug_resoudre_cdn(son_id: str, request: Request):
     }
 
 
+# ── Artistes ─────────────────────────────────────────────────────────────────
+
+def _lire_tags_mp3(chemin: Path) -> dict:
+    """Lit les tags ID3 d'un MP3 et retourne un dict normalisé."""
+    from mutagen.id3 import ID3, ID3NoHeaderError
+    from mutagen.mp3 import MP3 as MutagenMP3
+    result = {
+        "nom": chemin.name,
+        "titre": chemin.stem,
+        "artiste": "",
+        "album": "",
+        "annee": "",
+        "genre": "",
+        "piste": "",
+        "duree": 0,
+        "cover": False,
+        "lyrics": chemin.with_suffix(".lrc").exists(),
+    }
+    try:
+        audio = MutagenMP3(str(chemin))
+        result["duree"] = int(audio.info.length)
+    except Exception:
+        pass
+    try:
+        tags = ID3(str(chemin))
+        def _t(k):
+            f = tags.get(k)
+            return str(f.text[0]) if f and hasattr(f, "text") and f.text else ""
+        result["titre"]   = _t("TIT2") or chemin.stem
+        result["artiste"] = _t("TPE1")
+        result["album"]   = _t("TALB")
+        result["annee"]   = _t("TDRC")
+        result["genre"]   = _t("TCON")
+        result["piste"]   = _t("TRCK").split("/")[0]
+        result["cover"]   = any(k.startswith("APIC") for k in tags)
+    except Exception:
+        pass
+    return result
+
+
+@router.get(
+    "/artistes",
+    tags=["Artistes"],
+    summary="Lister tous les artistes avec leurs statistiques",
+)
+async def lister_artistes():
+    if not DOSSIER_MUSIQUES.exists():
+        return []
+    from collections import defaultdict
+    artistes: dict = defaultdict(lambda: {"sons": 0, "albums": set(), "cover_exemple": None})
+    for mp3 in sorted(DOSSIER_MUSIQUES.glob("*.mp3")):
+        info = _lire_tags_mp3(mp3)
+        nom = info["artiste"] or "Inconnu"
+        artistes[nom]["sons"] += 1
+        if info["album"]:
+            artistes[nom]["albums"].add(info["album"])
+        if info["cover"] and artistes[nom]["cover_exemple"] is None:
+            artistes[nom]["cover_exemple"] = mp3.name
+    return [
+        {
+            "nom":           nom,
+            "nb_sons":       data["sons"],
+            "nb_albums":     len(data["albums"]),
+            "cover_exemple": data["cover_exemple"],
+        }
+        for nom, data in sorted(artistes.items(), key=lambda x: -x[1]["sons"])
+    ]
+
+
+@router.get(
+    "/artistes/{nom}/profil",
+    tags=["Artistes"],
+    summary="Récupérer tous les sons et albums d'un artiste",
+)
+async def profil_artiste(nom: str):
+    if not DOSSIER_MUSIQUES.exists():
+        raise HTTPException(status_code=404, detail="Dossier musiques introuvable")
+    from collections import defaultdict
+    sons = []
+    albums: dict = defaultdict(lambda: {"titre": "", "annee": "", "pistes": [], "cover": None})
+
+    for mp3 in sorted(DOSSIER_MUSIQUES.glob("*.mp3")):
+        info = _lire_tags_mp3(mp3)
+        artiste_fichier = info["artiste"] or "Inconnu"
+        if artiste_fichier.lower() != nom.lower():
+            continue
+        info["cover_url"] = f"/api/fichiers/{mp3.name}/cover" if info["cover"] else None
+        info["audio_url"] = f"/api/fichiers/{mp3.name}"
+        sons.append(info)
+        if info["album"]:
+            alb = albums[info["album"]]
+            alb["titre"] = info["album"]
+            alb["annee"] = info["annee"]
+            piste_num = int(info["piste"]) if info["piste"].isdigit() else 999
+            alb["pistes"].append({"nom": mp3.name, "titre": info["titre"], "piste": piste_num})
+            if alb["cover"] is None and info["cover"]:
+                alb["cover"] = f"/api/fichiers/{mp3.name}/cover"
+
+    # Trier les sons : piste si disponible, sinon titre
+    sons.sort(key=lambda s: (s["album"], int(s["piste"]) if s["piste"].isdigit() else 999, s["titre"]))
+
+    # Trier les pistes dans chaque album
+    albums_list = []
+    for alb in albums.values():
+        alb["pistes"].sort(key=lambda p: p["piste"])
+        albums_list.append(alb)
+    albums_list.sort(key=lambda a: a["annee"] or "0000", reverse=True)
+
+    return {
+        "nom":    nom,
+        "sons":   sons,
+        "albums": albums_list,
+    }
+
+
+# ── Artistes ─────────────────────────────────────────────────────────────────
+
+def _lire_tags_mp3(chemin: Path) -> dict:
+    """Lit les tags ID3 d'un MP3 et retourne un dict normalisé."""
+    from mutagen.id3 import ID3, ID3NoHeaderError
+    from mutagen.mp3 import MP3 as MutagenMP3
+    result = {
+        "nom": chemin.name, "titre": chemin.stem,
+        "artiste": "", "album": "", "annee": "", "genre": "",
+        "piste": "", "duree": 0, "cover": False,
+        "lyrics": chemin.with_suffix(".lrc").exists(),
+    }
+    try:
+        result["duree"] = int(MutagenMP3(str(chemin)).info.length)
+    except Exception:
+        pass
+    try:
+        tags = ID3(str(chemin))
+        def _t(k):
+            f = tags.get(k)
+            return str(f.text[0]) if f and hasattr(f, "text") and f.text else ""
+        result["titre"]   = _t("TIT2") or chemin.stem
+        result["artiste"] = _t("TPE1")
+        result["album"]   = _t("TALB")
+        result["annee"]   = _t("TDRC")
+        result["genre"]   = _t("TCON")
+        result["piste"]   = _t("TRCK").split("/")[0]
+        result["cover"]   = any(k.startswith("APIC") for k in tags)
+    except Exception:
+        pass
+    return result
+
+
+@router.get("/artistes", tags=["Artistes"], summary="Lister tous les artistes avec statistiques")
+async def lister_artistes():
+    if not DOSSIER_MUSIQUES.exists():
+        return []
+    from collections import defaultdict
+    artistes: dict = defaultdict(lambda: {"sons": 0, "albums": set(), "cover_exemple": None})
+    for mp3 in sorted(DOSSIER_MUSIQUES.glob("*.mp3")):
+        info = _lire_tags_mp3(mp3)
+        nom = info["artiste"] or "Inconnu"
+        artistes[nom]["sons"] += 1
+        if info["album"]:
+            artistes[nom]["albums"].add(info["album"])
+        if info["cover"] and artistes[nom]["cover_exemple"] is None:
+            artistes[nom]["cover_exemple"] = mp3.name
+    return [
+        {"nom": nom, "nb_sons": d["sons"], "nb_albums": len(d["albums"]), "cover_exemple": d["cover_exemple"]}
+        for nom, d in sorted(artistes.items(), key=lambda x: -x[1]["sons"])
+    ]
+
+
+@router.get("/artistes/{nom}/profil", tags=["Artistes"], summary="Récupérer les sons et albums d'un artiste")
+async def profil_artiste(nom: str):
+    if not DOSSIER_MUSIQUES.exists():
+        raise HTTPException(status_code=404, detail="Dossier musiques introuvable")
+    from collections import defaultdict
+    sons = []
+    albums: dict = defaultdict(lambda: {"titre": "", "annee": "", "pistes": [], "cover": None})
+    for mp3 in sorted(DOSSIER_MUSIQUES.glob("*.mp3")):
+        info = _lire_tags_mp3(mp3)
+        if (info["artiste"] or "Inconnu").lower() != nom.lower():
+            continue
+        info["cover_url"]  = f"/api/fichiers/{mp3.name}/cover" if info["cover"] else None
+        info["audio_url"]  = f"/api/fichiers/{mp3.name}"
+        sons.append(info)
+        if info["album"]:
+            alb = albums[info["album"]]
+            alb["titre"] = info["album"]
+            alb["annee"] = info["annee"]
+            n = int(info["piste"]) if info["piste"].isdigit() else 999
+            alb["pistes"].append({"nom": mp3.name, "titre": info["titre"], "piste": n})
+            if alb["cover"] is None and info["cover"]:
+                alb["cover"] = f"/api/fichiers/{mp3.name}/cover"
+    sons.sort(key=lambda s: (s["album"], int(s["piste"]) if s["piste"].isdigit() else 999, s["titre"]))
+    albums_list = sorted(albums.values(), key=lambda a: a["annee"] or "0000", reverse=True)
+    for a in albums_list:
+        a["pistes"].sort(key=lambda p: p["piste"])
+    return {"nom": nom, "sons": sons, "albums": albums_list}
+
+
 # ── Fichiers téléchargés ──────────────────────────────────────────────────────
 
 @router.get(
