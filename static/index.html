@@ -554,11 +554,12 @@ function renderSons(liste) {
     const tache = Object.values(tachesActives).find(t => t.titre === s.titre);
     const pct = tache ? tache.progression : 0;
 
-    const artUrl = `https://scdn.sonauto.ai/images/${encodeURIComponent(s.donnees_brutes?.song_path || '')}?optimizer=image&width=256&quality=75`;
+    const nomMp3 = encodeURIComponent(s.titre + '.mp3');
+    const artUrl = dl ? `/api/fichiers/${nomMp3}/cover` : '';
 
     return `<div class="song-card ${dl ? 'downloaded' : ''}" data-id="${s.id}">
       <div class="song-art">
-        <img src="${artUrl}" onerror="this.style.display='none'" loading="lazy">
+        ${artUrl ? `<img src="${artUrl}" onerror="this.style.display='none'" loading="lazy">` : ''}
         🎵
         <div class="song-art-overlay">
           ${dl ? `<button class="btn btn-sm btn-green" onclick="jouerFichier('${encodeURIComponent(s.titre)}')">▶ Écouter</button>`
@@ -702,7 +703,9 @@ function renderFichiers(fichiers) {
   }
   el.innerHTML = fichiers.map(f => `
     <div class="fichier-item">
-      <div class="fichier-icon">🎵</div>
+      <div class="fichier-cover" style="width:44px;height:44px;border-radius:6px;overflow:hidden;flex-shrink:0;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:1.2rem;">
+        <img src="/api/fichiers/${encodeURIComponent(f.nom)}/cover" alt="" style="width:100%;height:100%;object-fit:cover;" onerror="this.parentElement.innerHTML='🎵'">
+      </div>
       <div class="fichier-info">
         <div class="fichier-nom">${f.nom}</div>
         <div class="fichier-meta">${fmt(f.taille)}${f.lyrics ? ' · 📝 LRC' : ''}</div>

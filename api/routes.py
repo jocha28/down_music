@@ -514,6 +514,35 @@ async def synchroniser_tags(request: Request):
 
 
 @router.get(
+    "/fichiers/{nom_fichier}/cover",
+    tags=["Fichiers"],
+    summary="Retourner la cover art d'un fichier MP3",
+)
+async def obtenir_cover(nom_fichier: str):
+    from mutagen.id3 import ID3, ID3NoHeaderError
+    from fastapi.responses import Response
+
+    chemin = DOSSIER_MUSIQUES / nom_fichier
+    if not chemin.exists() or not chemin.is_file():
+        raise HTTPException(status_code=404, detail="Fichier non trouvé")
+
+    try:
+        tags = ID3(str(chemin))
+    except ID3NoHeaderError:
+        raise HTTPException(status_code=404, detail="Pas de tags")
+
+    for cle, frame in tags.items():
+        if cle.startswith("APIC"):
+            return Response(
+                content=frame.data,
+                media_type=frame.mime or "image/jpeg",
+                headers={"Cache-Control": "public, max-age=86400"},
+            )
+
+    raise HTTPException(status_code=404, detail="Pas de cover")
+
+
+@router.get(
     "/fichiers/{nom_fichier}/tags",
     tags=["Fichiers"],
     summary="Lire les tags ID3 d'un fichier MP3",
