@@ -133,22 +133,34 @@
   .disco-type-badge.single { background: rgba(255,255,255,.1); color: var(--text2); }
 
   /* ── ABOUT ── */
-  .about-wrap { display: grid; grid-template-columns: 1fr 320px; gap: 40px; }
-  @media (max-width: 860px) { .about-wrap { grid-template-columns: 1fr; } }
-  .about-photo { width: 100%; aspect-ratio: 16/10; border-radius: var(--radius); overflow: hidden; position: relative; cursor: pointer; }
-  .about-photo img { width: 100%; height: 100%; object-fit: cover; }
-  .about-photo-placeholder { width: 100%; aspect-ratio: 16/10; background: linear-gradient(135deg, #1a1a2e, var(--accent)); border-radius: var(--radius); display: flex; align-items: center; justify-content: center; font-size: 4rem; cursor: pointer; }
-  .about-listeners { font-size: 1.3rem; font-weight: 700; margin-top: 16px; }
-  .about-bio { font-size: .9rem; color: var(--text2); line-height: 1.7; margin-top: 10px; }
-  .bio-edit { width: 100%; background: var(--bg3); border: 1px solid var(--border); border-radius: 4px; color: #fff; padding: 10px 12px; font-size: .875rem; font-family: inherit; resize: vertical; outline: none; min-height: 100px; margin-top: 8px; display: none; }
+  /* ── ABOUT CARD (style Spotify) ── */
+  .about-card {
+    border-radius: 12px; overflow: hidden; position: relative;
+    min-height: 320px; cursor: pointer;
+    background: var(--bg2);
+  }
+  .about-card-bg {
+    position: absolute; inset: 0; background-size: cover; background-position: center top;
+    filter: brightness(.35) saturate(.6);
+  }
+  .about-card-overlay { position: absolute; inset: 0; background: linear-gradient(transparent 30%, rgba(0,0,0,.55) 100%); }
+  .about-card-content { position: relative; padding: 32px; display: flex; flex-direction: column; min-height: 320px; }
+  .about-avatar {
+    width: 128px; height: 128px; border-radius: 50%;
+    overflow: hidden; flex-shrink: 0;
+    background: linear-gradient(135deg, var(--accent), #1a1a2e);
+    display: flex; align-items: center; justify-content: center; font-size: 3rem;
+    box-shadow: 0 4px 24px rgba(0,0,0,.5); cursor: pointer;
+  }
+  .about-avatar img { width: 100%; height: 100%; object-fit: cover; }
+  .about-bottom { margin-top: auto; padding-top: 60px; }
+  .about-listeners { font-size: 1.25rem; font-weight: 700; margin-bottom: 8px; }
+  .about-bio { font-size: .875rem; color: var(--text2); line-height: 1.65; max-width: 520px; }
+  .bio-edit { width: 100%; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.15); border-radius: 4px; color: #fff; padding: 10px 12px; font-size: .875rem; font-family: inherit; resize: vertical; outline: none; min-height: 80px; margin-top: 8px; display: none; }
   .bio-edit.visible { display: block; }
   .bio-edit:focus { border-color: var(--text2); }
-  .edit-bio-btn { background: none; border: 1px solid var(--border); color: var(--text2); padding: 5px 14px; border-radius: 99px; font-size: .75rem; cursor: pointer; margin-top: 8px; transition: all .15s; }
+  .edit-bio-btn { background: none; border: 1px solid rgba(255,255,255,.25); color: var(--text2); padding: 5px 14px; border-radius: 99px; font-size: .75rem; cursor: pointer; margin-top: 10px; transition: all .15s; }
   .edit-bio-btn:hover { border-color: #fff; color: #fff; }
-  .about-stats { display: flex; flex-direction: column; gap: 16px; }
-  .about-stat-item { padding-bottom: 16px; border-bottom: 1px solid var(--border); }
-  .about-stat-label { font-size: .72rem; text-transform: uppercase; letter-spacing: .1em; color: var(--text3); margin-bottom: 5px; }
-  .about-stat-val { font-size: 1.1rem; font-weight: 700; }
 
   /* ── PLAYER BOTTOM ── */
   .player { position: fixed; bottom: 0; left: 0; right: 0; height: 80px; background: linear-gradient(var(--bg2), #0e0e0e); border-top: 1px solid var(--border); display: none; align-items: center; padding: 0 24px; gap: 20px; z-index: 400; }
@@ -331,18 +343,24 @@
     <!-- À PROPOS -->
     <div style="margin-bottom:48px">
       <div class="section-title">À propos</div>
-      <div class="about-wrap">
-        <div>
-          <div id="aboutPhotoWrap">
-            <div class="about-photo-placeholder" id="aboutPlaceholder" onclick="document.getElementById('aboutPhotoInput').click()">🎤</div>
+      <div class="about-card" id="aboutCard">
+        <div class="about-card-bg" id="aboutBg"></div>
+        <div class="about-card-overlay"></div>
+        <div class="about-card-content">
+          <!-- Avatar circulaire -->
+          <div class="about-avatar" id="aboutAvatar" onclick="event.stopPropagation();document.getElementById('aboutPhotoInput').click()" title="Changer la photo">
+            <span id="aboutAvaEmoji">🎤</span>
+            <img id="aboutAvaImg" style="display:none" alt="">
           </div>
           <input type="file" id="aboutPhotoInput" accept="image/*" style="display:none" onchange="changerAboutPhoto(this)">
-          <div class="about-listeners" id="aboutSons">–</div>
-          <div class="about-bio" id="bioPara">Aucune biographie. Cliquez sur Modifier pour en ajouter une.</div>
-          <textarea class="bio-edit" id="bioEdit" placeholder="Écrire une biographie…"></textarea>
-          <button class="edit-bio-btn" id="editBioBtn" onclick="toggleBio()">Modifier</button>
+          <!-- Bas de la carte -->
+          <div class="about-bottom">
+            <div class="about-listeners" id="aboutSons">–</div>
+            <div class="about-bio" id="bioPara">Aucune biographie. Cliquez sur Modifier pour en ajouter une.</div>
+            <textarea class="bio-edit" id="bioEdit" placeholder="Écrire une biographie…"></textarea>
+            <button class="edit-bio-btn" id="editBioBtn" onclick="event.stopPropagation();toggleBio()">Modifier</button>
+          </div>
         </div>
-        <div class="about-stats" id="aboutStats"></div>
       </div>
     </div>
 
@@ -465,19 +483,17 @@ function render() {
   document.getElementById('bioPara').textContent = bioSaved || 'Aucune biographie. Cliquez sur Modifier pour en ajouter une.';
   document.getElementById('bioPara').style.color = bioSaved ? 'var(--text2)' : 'var(--text3)';
 
-  // Stats
+  // Stats About
   const genres = [...new Set(s.map(x => x.genre).filter(Boolean))];
   const annees = [...new Set(s.map(x=>x.annee).filter(Boolean))].sort();
-  document.getElementById('aboutSons').textContent = `${s.length} sons`;
-  document.getElementById('aboutStats').innerHTML = [
-    ['Sons',    s.length],
-    ['Albums',  albums.length],
-    ['Genres',  genres.slice(0,3).join(', ') || '–'],
-    ['Depuis',  annees[0] || '–'],
-  ].map(([l,v]) => `<div class="about-stat-item">
-    <div class="about-stat-label">${l}</div>
-    <div class="about-stat-val">${v}</div>
-  </div>`).join('');
+  document.getElementById('aboutSons').textContent = `${s.length} sons · ${albums.length} album${albums.length!==1?'s':''}`;
+  // Fond de la carte About = même image que le hero
+  if (avecCover) {
+    document.getElementById('aboutBg').style.backgroundImage = `url('${avecCover.cover_url}')`;
+    document.getElementById('aboutAvaImg').src = avecCover.cover_url;
+    document.getElementById('aboutAvaImg').style.display = 'block';
+    document.getElementById('aboutAvaEmoji').style.display = 'none';
+  }
 
   // Populaires
   renderPopular();
@@ -699,8 +715,10 @@ function changerHero(input) {
 function changerAboutPhoto(input) {
   const f = input.files[0]; if (!f) return;
   const r = new FileReader(); r.onload = e => {
-    const wrap = document.getElementById('aboutPhotoWrap');
-    wrap.innerHTML = `<div class="about-photo" onclick="document.getElementById('aboutPhotoInput').click()"><img src="${e.target.result}" alt=""></div>`;
+    document.getElementById('aboutAvaImg').src = e.target.result;
+    document.getElementById('aboutAvaImg').style.display = 'block';
+    document.getElementById('aboutAvaEmoji').style.display = 'none';
+    document.getElementById('aboutBg').style.backgroundImage = `url('${e.target.result}')`;
   }; r.readAsDataURL(f);
 }
 
