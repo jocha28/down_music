@@ -410,12 +410,18 @@
     Sonauto Downloader
   </a>
   <span class="page-title">Éditeur de tags ID3</span>
-  <a href="/" class="lien-retour">
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <polyline points="15 18 9 12 15 6"/>
-    </svg>
-    Retour
-  </a>
+  <div style="display:flex;align-items:center;gap:10px;">
+    <button id="btnSyncTags" onclick="syncTags()" style="background:var(--accent);border:none;color:#fff;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:.82rem;display:flex;align-items:center;gap:6px;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+      Sync genres/années
+    </button>
+    <a href="/" class="lien-retour">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="15 18 9 12 15 6"/>
+      </svg>
+      Retour
+    </a>
+  </div>
 </header>
 
 <main>
@@ -584,6 +590,26 @@ function afficherToast(message, type = 'succes') {
   toast.innerHTML = icone + message;
   document.getElementById('toasts').appendChild(toast);
   setTimeout(() => toast.remove(), 4000);
+}
+
+/* ── Synchronisation genres/années ── */
+async function syncTags() {
+  const btn = document.getElementById('btnSyncTags');
+  btn.disabled = true;
+  btn.textContent = 'Synchronisation…';
+  try {
+    const rep = await fetch('/api/tags/synchroniser', { method: 'POST' });
+    if (!rep.ok) throw new Error(await rep.text());
+    const data = await rep.json();
+    afficherToast('success', `✓ ${data.mis_a_jour} mis à jour, ${data.deja_tags} déjà taggués, ${data.non_trouve} non trouvés`);
+    // Recharger les tags du fichier actuel si ouvert
+    if (fichierActuel) chargerTags(fichierActuel);
+  } catch(e) {
+    afficherToast('error', 'Erreur : ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Sync genres/années';
+  }
 }
 
 /* ── Chargement de la liste ── */

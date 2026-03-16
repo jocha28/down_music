@@ -419,6 +419,100 @@ async def obtenir_lyrics(nom_fichier: str):
 
 # ── Tags ID3 ──────────────────────────────────────────────────────────────────
 
+@router.post(
+    "/tags/synchroniser",
+    tags=["Fichiers"],
+    summary="Synchroniser genre/année depuis Sonauto pour tous les MP3 existants",
+)
+async def synchroniser_tags(request: Request):
+    """
+    Récupère tous les sons likés depuis Sonauto, fait correspondre
+    les MP3 locaux par titre, et écrit genre (TCON) + année (TDRC)
+    dans ceux qui n'ont pas encore ces tags.
+    """
+    import re as _re
+    from mutagen.id3 import ID3, TCON, TDRC, ID3NoHeaderError, Encoding
+
+    token = await _token_ou_rafraichi(request)
+    async with ClientSonauto(token) as client:
+        sons = await client.lister_sons_likes()
+
+    if not sons:
+        raise HTTPException(status_code=404, detail="Aucun son liké trouvé")
+
+    if not DOSSIER_MUSIQUES.exists():
+        raise HTTPException(status_code=404, detail="Dossier musiques introuvable")
+
+    # Index titre → son (titre normalisé pour la comparaison)
+    def _normaliser(s: str) -> str:
+        return _re.sub(r'[^a-z0-9]', '', s.lower())
+
+    index_sons = {_normaliser(s.titre): s for s in sons}
+
+    resultats = {"mis_a_jour": [], "deja_tags": [], "non_trouve": [], "erreurs": []}
+
+    # Pour chaque MP3 local
+    mp3s = sorted(DOSSIER_MUSIQUES.glob("*.mp3"))
+    for mp3 in mp3s:
+        titre_fichier = mp3.stem  # ex: "Active"
+        cle = _normaliser(titre_fichier)
+        son = index_sons.get(cle)
+
+        if not son:
+            resultats["non_trouve"].append(mp3.name)
+            continue
+
+        try:
+            try:
+                tags = ID3(str(mp3))
+            except ID3NoHeaderError:
+                tags = ID3()
+
+            frame_genre = tags.get("TCON")
+            frame_annee = tags.get("TDRC")
+            genre_actuel = str(frame_genre.text[0]) if frame_genre and hasattr(frame_genre, "text") and frame_genre.text else ""
+            annee_actuelle = str(frame_annee.text[0]) if frame_annee and hasattr(frame_annee, "text") and frame_annee.text else ""
+
+            if genre_actuel and annee_actuelle:
+                resultats["deja_tags"].append(mp3.name)
+                continue
+
+            # Récupérer le genre depuis Sonauto
+            track_params_id = son.donnees_brutes.get("track_params_id") or ""
+            annee = (son.donnees_brutes.get("created_at") or "")[:4]
+
+            async with ClientSonauto(token) as client:
+                tags_son = await client.obtenir_tags(track_params_id)
+
+            genre = ", ".join(tags_son) if tags_son else ""
+
+            modifie = False
+            if genre and not genre_actuel:
+                tags["TCON"] = TCON(encoding=Encoding.UTF8, text=[genre])
+                modifie = True
+            if annee and not annee_actuelle:
+                tags["TDRC"] = TDRC(encoding=Encoding.UTF8, text=[annee])
+                modifie = True
+
+            if modifie:
+                tags.save(str(mp3))
+                resultats["mis_a_jour"].append({"fichier": mp3.name, "genre": genre, "annee": annee})
+            else:
+                resultats["deja_tags"].append(mp3.name)
+
+        except Exception as e:
+            resultats["erreurs"].append({"fichier": mp3.name, "erreur": str(e)})
+
+    return {
+        "total_mp3": len(mp3s),
+        "mis_a_jour": len(resultats["mis_a_jour"]),
+        "deja_tags": len(resultats["deja_tags"]),
+        "non_trouve": len(resultats["non_trouve"]),
+        "erreurs": len(resultats["erreurs"]),
+        "details": resultats,
+    }
+
+
 @router.get(
     "/fichiers/{nom_fichier}/tags",
     tags=["Fichiers"],
