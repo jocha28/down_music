@@ -97,10 +97,14 @@ async def _executer_telechargement(tache_id: str, son: Son, token: str):
     url_audio = son.url_audio
     if not url_audio:
         async with ClientSonauto(token) as client:
+            # 1. Détails via API
             details = await client.obtenir_son(son.id)
             if details:
                 url_audio = details.url_audio
                 son = details
+            # 2. Résolution directe sur le CDN
+            if not url_audio:
+                url_audio = await client.resoudre_url_audio(son.id) or ""
 
     if not url_audio:
         tache.statut = StatutTelecharge.ERREUR

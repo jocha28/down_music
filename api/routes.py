@@ -219,6 +219,57 @@ async def flux_progression(tache_id: str):
     )
 
 
+# ── Diagnostic ───────────────────────────────────────────────────────────────
+
+@router.get(
+    "/debug/api-brute",
+    tags=["Debug"],
+    summary="Tester un endpoint Sonauto brut (pour trouver le bon endpoint)",
+)
+async def debug_api_brute(url: str, request: Request):
+    """
+    Envoie une requête GET authentifiée à l'URL fournie et retourne la réponse brute.
+    Utile pour explorer l'API et trouver les bons endpoints.
+
+    Exemple : ?url=https://sonauto.ai/api/liked-songs
+    """
+    import httpx
+    from .client_sonauto import HEADERS_BASE
+    token = _token(request)
+    async with httpx.AsyncClient(headers={
+        **HEADERS_BASE,
+        "Authorization": f"Bearer {token}",
+    }, follow_redirects=True, timeout=15) as client:
+        r = await client.get(url)
+        try:
+            corps = r.json()
+        except Exception:
+            corps = r.text[:2000]
+    return {
+        "statut":    r.status_code,
+        "url":       str(r.url),
+        "en_tetes":  dict(r.headers),
+        "corps":     corps,
+    }
+
+
+@router.get(
+    "/debug/resoudre-cdn/{son_id}",
+    tags=["Debug"],
+    summary="Tester la résolution d'URL audio CDN pour un ID donné",
+)
+async def debug_resoudre_cdn(son_id: str, request: Request):
+    """Tente de trouver l'URL audio d'un son sur le CDN sonauto.ai."""
+    from .client_sonauto import CDN_AUDIO_PATTERNS
+    async with ClientSonauto(_token(request)) as client:
+        url = await client.resoudre_url_audio(son_id)
+    return {
+        "son_id":      son_id,
+        "url_trouvee": url,
+        "patterns_testes": [p.format(id=son_id) for p in CDN_AUDIO_PATTERNS],
+    }
+
+
 # ── Fichiers téléchargés ──────────────────────────────────────────────────────
 
 @router.get(
