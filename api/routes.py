@@ -196,42 +196,8 @@ async def obtenir_son(generation_id: str, request: Request) -> Son:
 
 
 # ── Téléchargements ───────────────────────────────────────────────────────────
-
-@router.post(
-    "/telecharger/{generation_id}",
-    response_model=ReponseTelechargement,
-    tags=["Téléchargements"],
-    summary="Télécharger un son par son ID",
-)
-async def telecharger_son(generation_id: str, request: Request):
-    token = await _token_ou_rafraichi(request)
-    async with ClientSonauto(token) as client:
-        son = await client.obtenir_son(generation_id)
-    if not son:
-        raise HTTPException(status_code=404, detail="Son non trouvé")
-
-    tache_id = await svc.lancer_telechargement(son, token)
-    return ReponseTelechargement(
-        tache_id=tache_id,
-        message=f"Téléchargement lancé pour « {son.titre} »",
-    )
-
-
-@router.post(
-    "/telecharger/url",
-    response_model=ReponseTelechargement,
-    tags=["Téléchargements"],
-    summary="Télécharger via l'URL de l'éditeur Sonauto",
-)
-async def telecharger_par_url(body: dict, request: Request):
-    import re
-    url = body.get("url", "")
-    m   = re.search(r'/editor/([^/]+)/([^/?]+)', url)
-    if not m:
-        raise HTTPException(status_code=400, detail="URL non reconnue")
-    generation_id = m.group(2)
-    return await telecharger_son(generation_id, request)
-
+# IMPORTANT : les routes statiques (/tous, /url) doivent être déclarées
+# AVANT la route dynamique (/{generation_id}) sinon FastAPI les intercepte.
 
 @router.post(
     "/telecharger/tous",
@@ -255,6 +221,42 @@ async def telecharger_tous(request: Request):
         )
         for tid, son in zip(tache_ids, sons)
     ]
+
+
+@router.post(
+    "/telecharger/url",
+    response_model=ReponseTelechargement,
+    tags=["Téléchargements"],
+    summary="Télécharger via l'URL de l'éditeur Sonauto",
+)
+async def telecharger_par_url(body: dict, request: Request):
+    import re
+    url = body.get("url", "")
+    m   = re.search(r'/editor/([^/]+)/([^/?]+)', url)
+    if not m:
+        raise HTTPException(status_code=400, detail="URL non reconnue")
+    generation_id = m.group(2)
+    return await telecharger_son(generation_id, request)
+
+
+@router.post(
+    "/telecharger/{generation_id}",
+    response_model=ReponseTelechargement,
+    tags=["Téléchargements"],
+    summary="Télécharger un son par son ID",
+)
+async def telecharger_son(generation_id: str, request: Request):
+    token = await _token_ou_rafraichi(request)
+    async with ClientSonauto(token) as client:
+        son = await client.obtenir_son(generation_id)
+    if not son:
+        raise HTTPException(status_code=404, detail="Son non trouvé")
+
+    tache_id = await svc.lancer_telechargement(son, token)
+    return ReponseTelechargement(
+        tache_id=tache_id,
+        message=f"Téléchargement lancé pour « {son.titre} »",
+    )
 
 
 # ── Suivi des tâches ──────────────────────────────────────────────────────────
