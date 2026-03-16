@@ -16,7 +16,7 @@ except ImportError:
     MUTAGEN_OK = False
 
 from .modeles import ProgressionTelechargement, StatutTelecharge, Son
-from .client_sonauto import ClientSonauto
+from .client_sonauto import ClientSonauto, convertir_ogg_en_mp3
 
 
 DOSSIER_MUSIQUES = Path("musiques")
@@ -36,10 +36,10 @@ def obtenir_tache(tache_id: str) -> ProgressionTelechargement | None:
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _nom_propre(titre: str) -> str:
+def _nom_propre(titre: str, ext: str = ".mp3") -> str:
     import re
     nom = re.sub(r'[<>:"/\\|?*]', "", titre).strip(". ")
-    return (nom[:100] or "sans_titre") + ".mp3"
+    return (nom[:100] or "sans_titre") + ext
 
 
 def _extraire_lyrics(son: Son) -> tuple[str, list]:
@@ -121,30 +121,50 @@ async def _executer_telechargement(tache_id: str, son: Son, token: str):
 
     tache.statut = StatutTelecharge.EN_COURS
 
+    # Détecter le format audio depuis l'URL (OGG ou MP3)
+    est_ogg = url_audio.lower().endswith(".ogg")
+    ext_tmp = ".ogg" if est_ogg else ".mp3"
+    chemin_tmp = DOSSIER_MUSIQUES / _nom_propre(son.titre, ext_tmp)
+    chemin_mp3 = DOSSIER_MUSIQUES / _nom_propre(son.titre, ".mp3")
+
     def maj_progression(recu: int, total: int):
         tache.octets_recus = recu
         tache.octets_total = total
-        tache.progression  = round(recu / total * 100, 1) if total else 0
+        # Téléchargement = 0-80%, conversion = 80-100%
+        tache.progression  = round(recu / total * 80, 1) if total else 0
 
     try:
         async with ClientSonauto(token) as client:
-            with open(chemin, "wb") as f:
+            with open(chemin_tmp, "wb") as f:
                 async for chunk in client.stream_audio(url_audio, maj_progression):
                     f.write(chunk)
 
+        tache.progression = 85.0
+
+        # Conversion OGG → MP3 si nécessaire
+        if est_ogg:
+            import asyncio
+            chemin_final = await asyncio.get_event_loop().run_in_executor(
+                None, convertir_ogg_en_mp3, chemin_tmp
+            )
+        else:
+            chemin_final = chemin_tmp
+
+        tache.progression = 95.0
+
         # Lyrics
         brut, synced = _extraire_lyrics(son)
-        _integrer_id3(chemin, son, brut, synced)
-        _sauvegarder_lrc(chemin, brut, synced)
+        _integrer_id3(chemin_final, son, brut, synced)
+        _sauvegarder_lrc(chemin_final, brut, synced)
 
         tache.statut         = StatutTelecharge.TERMINE
         tache.progression    = 100.0
-        tache.chemin_fichier = str(chemin)
+        tache.chemin_fichier = str(chemin_final)
 
     except Exception as e:
         tache.statut = StatutTelecharge.ERREUR
         tache.erreur = str(e)
-        chemin.unlink(missing_ok=True)
+        chemin_tmp.unlink(missing_ok=True)
 
 
 # ── API publique du service ───────────────────────────────────────────────────
