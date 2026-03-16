@@ -30,8 +30,26 @@ def _token(request: Request) -> str:
     if not token:
         raise HTTPException(
             status_code=401,
-            detail="Token non configuré — POST /config/token d'abord"
+            detail="Token non configuré — POST /config/cookie d'abord"
         )
+    return token
+
+
+async def _token_ou_rafraichi(request: Request) -> str:
+    """Retourne le token, en le renouvelant d'abord si nécessaire."""
+    import base64, time, json as _json
+    token = _token(request)
+    try:
+        parts = token.split(".")
+        p = parts[1].replace("-", "+").replace("_", "/")
+        p += "=" * (4 - len(p) % 4)
+        payload = _json.loads(base64.b64decode(p))
+        if payload.get("exp", 0) < time.time() + 30:
+            from main import _rafraichir_token
+            await _rafraichir_token(request.app)
+            token = request.app.state.token
+    except Exception:
+        pass
     return token
 
 
@@ -156,7 +174,7 @@ async def verifier_token(request: Request):
     summary="Lister tous les sons likés",
 )
 async def lister_sons(request: Request) -> list[Son]:
-    async with ClientSonauto(_token(request)) as client:
+    async with ClientSonauto(await _token_ou_rafraichi(request)) as client:
         try:
             return await client.lister_sons_likes()
         except PermissionError as e:
@@ -170,7 +188,7 @@ async def lister_sons(request: Request) -> list[Son]:
     summary="Obtenir les détails d'un son par son ID",
 )
 async def obtenir_son(generation_id: str, request: Request) -> Son:
-    async with ClientSonauto(_token(request)) as client:
+    async with ClientSonauto(await _token_ou_rafraichi(request)) as client:
         son = await client.obtenir_son(generation_id)
     if not son:
         raise HTTPException(status_code=404, detail="Son non trouvé")
@@ -186,7 +204,7 @@ async def obtenir_son(generation_id: str, request: Request) -> Son:
     summary="Télécharger un son par son ID",
 )
 async def telecharger_son(generation_id: str, request: Request):
-    token = _token(request)
+    token = await _token_ou_rafraichi(request)
     async with ClientSonauto(token) as client:
         son = await client.obtenir_son(generation_id)
     if not son:
@@ -222,7 +240,7 @@ async def telecharger_par_url(body: dict, request: Request):
     summary="Télécharger tous les sons likés",
 )
 async def telecharger_tous(request: Request):
-    token = _token(request)
+    token = await _token_ou_rafraichi(request)
     async with ClientSonauto(token) as client:
         sons = await client.lister_sons_likes()
 
