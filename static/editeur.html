@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Éditeur de tags — Sonauto Downloader</title>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --bg2: #12121a;
+    --bg3: #1a1a26;
+    --border: #2a2a3d;
+    --accent: #7c3aed;
+    --accent2: #a855f7;
+    --accent-glow: rgba(124,58,237,.35);
+    --green: #10b981;
+    --red: #ef4444;
+    --text: #e2e8f0;
+    --text2: #94a3b8;
+    --text3: #64748b;
+    --radius: 12px;
+    --radius-sm: 8px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', system-ui, sans-serif;
+    min-height: 100vh;
+    display: grid;
+    grid-template-rows: 60px 1fr;
+  }
+
+  /* ── HEADER ── */
+  header {
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    backdrop-filter: blur(12px);
+  }
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: var(--text);
+    text-decoration: none;
+  }
+  .logo svg { color: var(--accent2); }
+  .page-title {
+    font-size: .85rem;
+    color: var(--text3);
+    font-weight: 400;
+  }
+  .lien-retour {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text2);
+    text-decoration: none;
+    font-size: .875rem;
+    padding: 7px 14px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--bg3);
+    transition: all .15s;
+  }
+  .lien-retour:hover {
+    color: var(--text);
+    border-color: var(--accent2);
+    background: rgba(124,58,237,.1);
+  }
+
+  /* ── MAIN LAYOUT ── */
+  main {
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    height: calc(100vh - 60px);
+    overflow: hidden;
+  }
+
+  /* ── LISTE FICHIERS ── */
+  .liste-fichiers {
+    background: var(--bg2);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .liste-header {
+    padding: 16px 18px 12px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .liste-header-titre {
+    font-size: .7rem;
+    font-weight: 600;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--text3);
+    margin-bottom: 10px;
+  }
+  .recherche-input {
+    width: 100%;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    padding: 8px 12px;
+    font-size: .8rem;
+    outline: none;
+    transition: border-color .2s;
+  }
+  .recherche-input:focus { border-color: var(--accent2); }
+  .recherche-input::placeholder { color: var(--text3); }
+  .liste-scroll {
+    overflow-y: auto;
+    flex: 1;
+    padding: 8px;
+  }
+  .liste-scroll::-webkit-scrollbar { width: 5px; }
+  .liste-scroll::-webkit-scrollbar-track { background: transparent; }
+  .liste-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+  .fichier-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background .15s;
+    border: 1px solid transparent;
+  }
+  .fichier-item:hover { background: var(--bg3); }
+  .fichier-item.actif {
+    background: rgba(124,58,237,.15);
+    border-color: rgba(124,58,237,.4);
+  }
+  .fichier-icone {
+    width: 32px;
+    height: 32px;
+    background: var(--bg3);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: .7rem;
+    color: var(--accent2);
+    font-weight: 700;
+  }
+  .fichier-item.actif .fichier-icone { background: rgba(124,58,237,.3); }
+  .fichier-nom {
+    font-size: .8rem;
+    color: var(--text2);
+    word-break: break-all;
+    line-height: 1.4;
+  }
+  .fichier-item.actif .fichier-nom { color: var(--text); }
+  .liste-vide {
+    padding: 32px 16px;
+    text-align: center;
+    color: var(--text3);
+    font-size: .85rem;
+  }
+
+  /* ── ÉDITEUR ── */
+  .editeur-zone {
+    overflow-y: auto;
+    padding: 28px 32px;
+  }
+  .editeur-zone::-webkit-scrollbar { width: 5px; }
+  .editeur-zone::-webkit-scrollbar-track { background: transparent; }
+  .editeur-zone::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+  .editeur-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text3);
+    gap: 12px;
+    text-align: center;
+  }
+  .editeur-placeholder svg { opacity: .3; }
+  .editeur-placeholder p { font-size: .9rem; }
+
+  .editeur-form { display: none; }
+  .editeur-form.visible { display: block; }
+
+  .editeur-titre-fichier {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .editeur-titre-fichier span {
+    font-size: .8rem;
+    color: var(--text3);
+    font-weight: 400;
+  }
+
+  .editeur-corps {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    gap: 28px;
+    align-items: start;
+  }
+
+  /* ── COVER ── */
+  .cover-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+  .cover-conteneur {
+    width: 200px;
+    height: 200px;
+    border-radius: var(--radius);
+    overflow: hidden;
+    border: 2px solid var(--border);
+    cursor: pointer;
+    transition: border-color .2s;
+    position: relative;
+    flex-shrink: 0;
+  }
+  .cover-conteneur:hover { border-color: var(--accent2); }
+  .cover-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: none;
+  }
+  .cover-img.visible { display: block; }
+  .cover-placeholder {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: rgba(255,255,255,.6);
+    font-size: .8rem;
+  }
+  .cover-placeholder.masque { display: none; }
+  .cover-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity .2s;
+    color: #fff;
+    font-size: .8rem;
+    gap: 6px;
+    flex-direction: column;
+  }
+  .cover-conteneur:hover .cover-overlay { opacity: 1; }
+  .cover-input { display: none; }
+  .cover-label {
+    font-size: .75rem;
+    color: var(--text3);
+    text-align: center;
+    line-height: 1.5;
+  }
+
+  /* ── CHAMPS ── */
+  .champs-grille {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  .champ-pleine-largeur { grid-column: 1 / -1; }
+  .groupe-champ { display: flex; flex-direction: column; gap: 6px; }
+  .champ-label {
+    font-size: .75rem;
+    font-weight: 500;
+    color: var(--text3);
+    letter-spacing: .04em;
+    text-transform: uppercase;
+  }
+  .champ-input, .champ-textarea {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    padding: 9px 12px;
+    font-size: .875rem;
+    font-family: inherit;
+    outline: none;
+    transition: border-color .2s;
+    width: 100%;
+  }
+  .champ-input:focus, .champ-textarea:focus { border-color: var(--accent2); }
+  .champ-input::placeholder, .champ-textarea::placeholder { color: var(--text3); }
+  .champ-textarea { resize: vertical; min-height: 72px; }
+
+  /* ── BOUTON ENREGISTRER ── */
+  .barre-actions {
+    margin-top: 24px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 10px 20px;
+    border-radius: var(--radius-sm);
+    border: none;
+    cursor: pointer;
+    font-size: .875rem;
+    font-weight: 500;
+    transition: all .15s;
+    white-space: nowrap;
+    font-family: inherit;
+  }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover:not(:disabled) {
+    background: var(--accent2);
+    box-shadow: 0 0 16px var(--accent-glow);
+  }
+  .btn-secondary { background: var(--bg3); color: var(--text2); border: 1px solid var(--border); }
+  .btn-secondary:hover:not(:disabled) { background: var(--border); color: var(--text); }
+
+  /* ── TOASTS ── */
+  #toasts {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    z-index: 9999;
+  }
+  .toast {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 18px;
+    border-radius: var(--radius-sm);
+    font-size: .875rem;
+    font-weight: 500;
+    animation: glisser-entree .25s ease;
+    max-width: 360px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.4);
+  }
+  .toast.succes {
+    background: rgba(16,185,129,.15);
+    border: 1px solid var(--green);
+    color: var(--green);
+  }
+  .toast.erreur {
+    background: rgba(239,68,68,.15);
+    border: 1px solid var(--red);
+    color: var(--red);
+  }
+  @keyframes glisser-entree {
+    from { transform: translateX(120%); opacity: 0; }
+    to   { transform: translateX(0);   opacity: 1; }
+  }
+
+  /* ── SÉPARATEUR ── */
+  .separateur {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 20px 0;
+  }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 900px) {
+    main { grid-template-columns: 240px 1fr; }
+    .editeur-corps { grid-template-columns: 1fr; }
+    .cover-section { flex-direction: row; align-items: flex-start; }
+  }
+  @media (max-width: 640px) {
+    main { grid-template-columns: 1fr; grid-template-rows: auto 1fr; height: auto; }
+    .liste-fichiers { max-height: 220px; border-right: none; border-bottom: 1px solid var(--border); }
+    .editeur-zone { padding: 20px 16px; }
+    .champs-grille { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <a href="/" class="logo">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M9 18V5l12-2v13"/>
+      <circle cx="6" cy="18" r="3"/>
+      <circle cx="18" cy="16" r="3"/>
+    </svg>
+    Sonauto Downloader
+  </a>
+  <span class="page-title">Éditeur de tags ID3</span>
+  <a href="/" class="lien-retour">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <polyline points="15 18 9 12 15 6"/>
+    </svg>
+    Retour
+  </a>
+</header>
+
+<main>
+  <!-- ── LISTE FICHIERS ── -->
+  <aside class="liste-fichiers">
+    <div class="liste-header">
+      <div class="liste-header-titre">Fichiers MP3</div>
+      <input
+        type="text"
+        class="recherche-input"
+        id="rechercheInput"
+        placeholder="Rechercher…"
+        autocomplete="off"
+      >
+    </div>
+    <div class="liste-scroll" id="listeFichiers">
+      <div class="liste-vide">Chargement…</div>
+    </div>
+  </aside>
+
+  <!-- ── ÉDITEUR ── -->
+  <section class="editeur-zone">
+
+    <!-- Placeholder quand aucun fichier sélectionné -->
+    <div class="editeur-placeholder" id="editeurPlaceholder">
+      <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+      </svg>
+      <p>Sélectionnez un fichier MP3<br>pour éditer ses tags</p>
+    </div>
+
+    <!-- Formulaire d'édition -->
+    <div class="editeur-form" id="editeurForm">
+      <div class="editeur-titre-fichier" id="editeurTitreFichier">
+        <!-- rempli dynamiquement -->
+      </div>
+
+      <div class="editeur-corps">
+        <!-- Cover -->
+        <div class="cover-section">
+          <div class="cover-conteneur" id="coverConteneur" title="Cliquer pour changer la cover">
+            <img src="" alt="Cover" class="cover-img" id="coverImg">
+            <div class="cover-placeholder" id="coverPlaceholder">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <rect x="3" y="3" width="18" height="18" rx="2"/>
+                <circle cx="8.5" cy="8.5" r="1.5"/>
+                <polyline points="21 15 16 10 5 21"/>
+              </svg>
+              Pas de cover
+            </div>
+            <div class="cover-overlay">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="17 8 12 3 7 8"/>
+                <line x1="12" y1="3" x2="12" y2="15"/>
+              </svg>
+              Changer la cover
+            </div>
+          </div>
+          <input type="file" accept="image/*" class="cover-input" id="coverInput">
+          <div class="cover-label">JPG ou PNG · Max 5 Mo<br>Cliquer sur l'image pour changer</div>
+        </div>
+
+        <!-- Champs -->
+        <div class="champs-grille">
+          <div class="groupe-champ champ-pleine-largeur">
+            <label class="champ-label" for="champTitre">Titre</label>
+            <input type="text" id="champTitre" class="champ-input" placeholder="Titre de la chanson">
+          </div>
+          <div class="groupe-champ">
+            <label class="champ-label" for="champArtiste">Artiste</label>
+            <input type="text" id="champArtiste" class="champ-input" placeholder="Nom de l'artiste">
+          </div>
+          <div class="groupe-champ">
+            <label class="champ-label" for="champAlbum">Album</label>
+            <input type="text" id="champAlbum" class="champ-input" placeholder="Nom de l'album">
+          </div>
+          <div class="groupe-champ">
+            <label class="champ-label" for="champAnnee">Année</label>
+            <input type="text" id="champAnnee" class="champ-input" placeholder="2026">
+          </div>
+          <div class="groupe-champ">
+            <label class="champ-label" for="champGenre">Genre</label>
+            <input type="text" id="champGenre" class="champ-input" placeholder="Pop, Rock, Électronique…">
+          </div>
+          <div class="groupe-champ">
+            <label class="champ-label" for="champPiste">N° de piste</label>
+            <input type="text" id="champPiste" class="champ-input" placeholder="1">
+          </div>
+          <div class="groupe-champ">
+            <label class="champ-label" for="champTotalPistes">Total pistes</label>
+            <input type="text" id="champTotalPistes" class="champ-input" placeholder="12">
+          </div>
+          <div class="groupe-champ champ-pleine-largeur">
+            <label class="champ-label" for="champCommentaire">Commentaire</label>
+            <textarea id="champCommentaire" class="champ-textarea" placeholder="Commentaire…"></textarea>
+          </div>
+        </div>
+      </div>
+
+      <hr class="separateur">
+
+      <div class="barre-actions">
+        <button type="button" class="btn btn-secondary" id="btnRecharger">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="1 4 1 10 7 10"/>
+            <path d="M3.51 15a9 9 0 1 0 .49-4"/>
+          </svg>
+          Annuler
+        </button>
+        <button type="button" class="btn btn-primary" id="btnEnregistrer">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+            <polyline points="17 21 17 13 7 13 7 21"/>
+            <polyline points="7 3 7 8 15 8"/>
+          </svg>
+          Enregistrer
+        </button>
+      </div>
+    </div>
+
+  </section>
+</main>
+
+<!-- Toasts -->
+<div id="toasts"></div>
+
+<script>
+'use strict';
+
+/* ── État global ── */
+let fichierActif = null;          // nom du fichier sélectionné
+let tagsOriginaux = null;         // tags chargés depuis l'API
+let coverFichier = null;          // File object si nouvelle cover choisie
+let tousLesFichiers = [];         // liste complète des fichiers
+
+/* ── Éléments DOM ── */
+const listeFichiersEl   = document.getElementById('listeFichiers');
+const rechercheInput    = document.getElementById('rechercheInput');
+const editeurPlaceholder = document.getElementById('editeurPlaceholder');
+const editeurFormEl     = document.getElementById('editeurForm');
+const editeurTitreFichier = document.getElementById('editeurTitreFichier');
+const coverConteneur    = document.getElementById('coverConteneur');
+const coverImg          = document.getElementById('coverImg');
+const coverPlaceholder  = document.getElementById('coverPlaceholder');
+const coverInput        = document.getElementById('coverInput');
+const champTitre        = document.getElementById('champTitre');
+const champArtiste      = document.getElementById('champArtiste');
+const champAlbum        = document.getElementById('champAlbum');
+const champAnnee        = document.getElementById('champAnnee');
+const champGenre        = document.getElementById('champGenre');
+const champPiste        = document.getElementById('champPiste');
+const champTotalPistes  = document.getElementById('champTotalPistes');
+const champCommentaire  = document.getElementById('champCommentaire');
+const btnEnregistrer    = document.getElementById('btnEnregistrer');
+const btnRecharger      = document.getElementById('btnRecharger');
+
+/* ── Utilitaires ── */
+function afficherToast(message, type = 'succes') {
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  const icone = type === 'succes'
+    ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>'
+    : '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
+  toast.innerHTML = icone + message;
+  document.getElementById('toasts').appendChild(toast);
+  setTimeout(() => toast.remove(), 4000);
+}
+
+/* ── Chargement de la liste ── */
+async function chargerFichiers() {
+  try {
+    const rep = await fetch('/api/fichiers');
+    if (!rep.ok) throw new Error('Erreur réseau');
+    tousLesFichiers = await rep.json();
+    afficherListe(tousLesFichiers);
+  } catch (e) {
+    listeFichiersEl.innerHTML = '<div class="liste-vide">Impossible de charger les fichiers.</div>';
+  }
+}
+
+function afficherListe(fichiers) {
+  if (fichiers.length === 0) {
+    listeFichiersEl.innerHTML = '<div class="liste-vide">Aucun fichier MP3 trouvé.</div>';
+    return;
+  }
+  listeFichiersEl.innerHTML = fichiers.map(f => `
+    <div class="fichier-item${fichierActif === f.nom ? ' actif' : ''}"
+         data-nom="${f.nom}"
+         title="${f.nom}">
+      <div class="fichier-icone">MP3</div>
+      <div class="fichier-nom">${f.nom.replace(/\.mp3$/i, '')}</div>
+    </div>
+  `).join('');
+  listeFichiersEl.querySelectorAll('.fichier-item').forEach(el => {
+    el.addEventListener('click', () => selectionnerFichier(el.dataset.nom));
+  });
+}
+
+rechercheInput.addEventListener('input', () => {
+  const q = rechercheInput.value.trim().toLowerCase();
+  afficherListe(q
+    ? tousLesFichiers.filter(f => f.nom.toLowerCase().includes(q))
+    : tousLesFichiers
+  );
+});
+
+/* ── Sélection d'un fichier ── */
+async function selectionnerFichier(nom) {
+  fichierActif = nom;
+  coverFichier = null;
+  afficherListe(tousLesFichiers.filter(f => {
+    const q = rechercheInput.value.trim().toLowerCase();
+    return q ? f.nom.toLowerCase().includes(q) : true;
+  }));
+  await chargerTags(nom);
+}
+
+/* ── Chargement des tags ── */
+async function chargerTags(nom) {
+  editeurPlaceholder.style.display = 'none';
+  editeurFormEl.classList.remove('visible');
+
+  // Titre du fichier
+  editeurTitreFichier.innerHTML =
+    `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+    </svg>
+    ${nom.replace(/\.mp3$/i, '')}
+    <span>.mp3</span>`;
+
+  try {
+    const rep = await fetch(`/api/fichiers/${encodeURIComponent(nom)}/tags`);
+    if (!rep.ok) throw new Error(`HTTP ${rep.status}`);
+    const tags = await rep.json();
+    tagsOriginaux = tags;
+    remplirFormulaire(tags);
+    editeurFormEl.classList.add('visible');
+  } catch (e) {
+    afficherToast('Erreur lors du chargement des tags : ' + e.message, 'erreur');
+    editeurPlaceholder.style.display = '';
+  }
+}
+
+/* ── Remplir le formulaire ── */
+function remplirFormulaire(tags) {
+  champTitre.value       = tags.titre        || '';
+  champArtiste.value     = tags.artiste      || '';
+  champAlbum.value       = tags.album        || '';
+  champAnnee.value       = tags.annee        || '';
+  champGenre.value       = tags.genre        || '';
+  champPiste.value       = tags.piste        || '';
+  champTotalPistes.value = tags.total_pistes || '';
+  champCommentaire.value = tags.commentaire  || '';
+
+  // Cover
+  coverFichier = null;
+  if (tags.cover_base64) {
+    coverImg.src = tags.cover_base64;
+    coverImg.classList.add('visible');
+    coverPlaceholder.classList.add('masque');
+  } else {
+    coverImg.classList.remove('visible');
+    coverImg.src = '';
+    coverPlaceholder.classList.remove('masque');
+  }
+}
+
+/* ── Cover : clic pour changer ── */
+coverConteneur.addEventListener('click', () => coverInput.click());
+coverInput.addEventListener('change', () => {
+  const fichier = coverInput.files[0];
+  if (!fichier) return;
+  coverFichier = fichier;
+  const url = URL.createObjectURL(fichier);
+  coverImg.src = url;
+  coverImg.classList.add('visible');
+  coverPlaceholder.classList.add('masque');
+});
+
+/* ── Annuler ── */
+btnRecharger.addEventListener('click', () => {
+  if (fichierActif && tagsOriginaux) {
+    remplirFormulaire(tagsOriginaux);
+    afficherToast('Modifications annulées.', 'succes');
+  }
+});
+
+/* ── Enregistrer ── */
+btnEnregistrer.addEventListener('click', async () => {
+  if (!fichierActif) return;
+
+  btnEnregistrer.disabled = true;
+  btnEnregistrer.textContent = 'Enregistrement…';
+
+  const fd = new FormData();
+
+  // N'envoyer que les champs qui ont une valeur OU qui ont été modifiés
+  const champs = [
+    ['titre',        champTitre.value],
+    ['artiste',      champArtiste.value],
+    ['album',        champAlbum.value],
+    ['annee',        champAnnee.value],
+    ['genre',        champGenre.value],
+    ['piste',        champPiste.value],
+    ['total_pistes', champTotalPistes.value],
+    ['commentaire',  champCommentaire.value],
+  ];
+  for (const [cle, val] of champs) {
+    if (val.trim() !== '') fd.append(cle, val.trim());
+  }
+  if (coverFichier) fd.append('cover', coverFichier);
+
+  try {
+    const rep = await fetch(`/api/fichiers/${encodeURIComponent(fichierActif)}/tags`, {
+      method: 'POST',
+      body: fd,
+    });
+    if (!rep.ok) {
+      const err = await rep.json().catch(() => ({ detail: 'Erreur inconnue' }));
+      throw new Error(err.detail || `HTTP ${rep.status}`);
+    }
+    // Recharger les tags pour mettre à jour l'état original
+    const repTags = await fetch(`/api/fichiers/${encodeURIComponent(fichierActif)}/tags`);
+    if (repTags.ok) {
+      tagsOriginaux = await repTags.json();
+    }
+    afficherToast('Tags enregistrés avec succès !', 'succes');
+  } catch (e) {
+    afficherToast('Erreur : ' + e.message, 'erreur');
+  } finally {
+    btnEnregistrer.disabled = false;
+    btnEnregistrer.innerHTML = `
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+        <polyline points="17 21 17 13 7 13 7 21"/>
+        <polyline points="7 3 7 8 15 8"/>
+      </svg>
+      Enregistrer`;
+  }
+});
+
+/* ── Init ── */
+chargerFichiers();
+</script>
+</body>
+</html>

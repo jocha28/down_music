@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 from typing import AsyncGenerator
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, UploadFile, Form
 from fastapi.responses import FileResponse, StreamingResponse
 
 from .modeles import (
@@ -415,3 +415,134 @@ async def obtenir_lyrics(nom_fichier: str):
     if not chemin.exists():
         raise HTTPException(status_code=404, detail="Lyrics non disponibles")
     return {"lyrics": chemin.read_text(encoding="utf-8")}
+
+
+# ── Tags ID3 ──────────────────────────────────────────────────────────────────
+
+@router.get(
+    "/fichiers/{nom_fichier}/tags",
+    tags=["Fichiers"],
+    summary="Lire les tags ID3 d'un fichier MP3",
+)
+async def lire_tags(nom_fichier: str):
+    import base64 as _b64
+    from mutagen.mp3 import MP3
+    from mutagen.id3 import ID3, ID3NoHeaderError
+
+    chemin = DOSSIER_MUSIQUES / nom_fichier
+    if not chemin.exists() or not chemin.is_file():
+        raise HTTPException(status_code=404, detail="Fichier non trouvé")
+
+    try:
+        tags = ID3(str(chemin))
+    except ID3NoHeaderError:
+        tags = {}
+
+    def _texte(tag):
+        frame = tags.get(tag)
+        if frame is None:
+            return ""
+        return str(frame.text[0]) if hasattr(frame, "text") and frame.text else ""
+
+    # Piste : peut être "3" ou "3/12"
+    trck_brut = _texte("TRCK")
+    parties   = trck_brut.split("/") if trck_brut else ["", ""]
+    piste          = parties[0] if len(parties) > 0 else ""
+    total_pistes   = parties[1] if len(parties) > 1 else ""
+
+    # Commentaire COMM (frame composite)
+    commentaire = ""
+    for cle, frame in tags.items():
+        if cle.startswith("COMM"):
+            commentaire = frame.text[0] if frame.text else ""
+            break
+
+    # Cover APIC
+    cover_b64 = None
+    for cle, frame in tags.items():
+        if cle.startswith("APIC"):
+            mime = frame.mime or "image/jpeg"
+            data = _b64.b64encode(frame.data).decode()
+            cover_b64 = f"data:{mime};base64,{data}"
+            break
+
+    return {
+        "titre":        _texte("TIT2"),
+        "artiste":      _texte("TPE1"),
+        "album":        _texte("TALB"),
+        "annee":        _texte("TDRC"),
+        "genre":        _texte("TCON"),
+        "piste":        piste,
+        "total_pistes": total_pistes,
+        "commentaire":  commentaire,
+        "cover_base64": cover_b64,
+    }
+
+
+@router.post(
+    "/fichiers/{nom_fichier}/tags",
+    tags=["Fichiers"],
+    summary="Écrire les tags ID3 d'un fichier MP3",
+)
+async def ecrire_tags(
+    nom_fichier:  str,
+    titre:        str | None = Form(None),
+    artiste:      str | None = Form(None),
+    album:        str | None = Form(None),
+    annee:        str | None = Form(None),
+    genre:        str | None = Form(None),
+    piste:        str | None = Form(None),
+    total_pistes: str | None = Form(None),
+    commentaire:  str | None = Form(None),
+    cover:        UploadFile | None = None,
+):
+    from mutagen.id3 import (
+        ID3, ID3NoHeaderError,
+        TIT2, TPE1, TALB, TDRC, TCON, TRCK, COMM, APIC,
+        Encoding,
+    )
+
+    chemin = DOSSIER_MUSIQUES / nom_fichier
+    if not chemin.exists() or not chemin.is_file():
+        raise HTTPException(status_code=404, detail="Fichier non trouvé")
+
+    try:
+        tags = ID3(str(chemin))
+    except ID3NoHeaderError:
+        tags = ID3()
+
+    def _set(frame_cls, tag_id, valeur, **kwargs):
+        if valeur:
+            tags[tag_id] = frame_cls(encoding=Encoding.UTF8, text=[valeur], **kwargs)
+
+    _set(TIT2, "TIT2", titre)
+    _set(TPE1, "TPE1", artiste)
+    _set(TALB, "TALB", album)
+    _set(TDRC, "TDRC", annee)
+    _set(TCON, "TCON", genre)
+
+    if piste:
+        valeur_trck = f"{piste}/{total_pistes}" if total_pistes else piste
+        tags["TRCK"] = TRCK(encoding=Encoding.UTF8, text=[valeur_trck])
+
+    if commentaire:
+        tags["COMM::fra"] = COMM(
+            encoding=Encoding.UTF8,
+            lang="fra",
+            desc="",
+            text=[commentaire],
+        )
+
+    if cover is not None and cover.filename:
+        contenu = await cover.read()
+        mime = cover.content_type or "image/jpeg"
+        tags["APIC:"] = APIC(
+            encoding=Encoding.UTF8,
+            mime=mime,
+            type=3,   # Front cover
+            desc="Cover",
+            data=contenu,
+        )
+
+    tags.save(str(chemin))
+    return {"message": "Tags enregistrés avec succès"}
