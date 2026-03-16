@@ -1,0 +1,5 @@
+musiques/
+.config_sonauto.json
+__pycache__/
+*.pyc
+*.pyo
