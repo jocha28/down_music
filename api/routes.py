@@ -460,6 +460,15 @@ async def profil_artiste(nom: str):
             alb = albums[info["album"]]
             alb["titre"] = info["album"]
             alb["annee"] = info["annee"]
+            # Lire le type de sortie depuis TXXX
+            if not alb.get("type"):
+                try:
+                    from mutagen.id3 import ID3, ID3NoHeaderError
+                    tags_mp3 = ID3(str(mp3))
+                    txxx = tags_mp3.get("TXXX:release_type")
+                    alb["type"] = str(txxx.text[0]) if txxx and txxx.text else "album"
+                except Exception:
+                    alb["type"] = "album"
             piste_num = int(info["piste"]) if info["piste"].isdigit() else 999
             alb["pistes"].append({"nom": mp3.name, "titre": info["titre"], "piste": piste_num})
             if alb["cover"] is None and info["cover"]:
