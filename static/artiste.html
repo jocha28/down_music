@@ -94,22 +94,48 @@
   .voir-plus-btn:hover { color: #fff; }
 
   /* ── ARTIST PICK ── */
-  .artist-pick { display: flex; flex-direction: column; gap: 12px; }
+  .artist-pick { display: flex; flex-direction: column; gap: 10px; }
   .pick-card {
-    background: var(--bg2); border-radius: var(--radius); overflow: hidden; cursor: pointer;
-    transition: background .15s; position: relative;
+    position: relative; border-radius: 10px; overflow: hidden; cursor: pointer;
+    aspect-ratio: 16/9; background: var(--bg3);
   }
-  .pick-card:hover { background: var(--bg3); }
-  .pick-cover { width: 100%; aspect-ratio: 16/9; overflow: hidden; position: relative; }
-  .pick-cover img { width: 100%; height: 100%; object-fit: cover; }
-  .pick-cover-placeholder { width: 100%; aspect-ratio: 16/9; background: linear-gradient(135deg, var(--accent), #1a1a2e); display: flex; align-items: center; justify-content: center; font-size: 3rem; }
-  .pick-play { position: absolute; bottom: 12px; right: 12px; width: 48px; height: 48px; border-radius: 50%; background: var(--green); border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; opacity: 0; transform: translateY(8px); transition: opacity .2s, transform .2s; box-shadow: 0 4px 16px rgba(0,0,0,.4); }
+  /* Fond = cover du son, flouté/assombri */
+  .pick-bg { position: absolute; inset: 0; background-size: cover; background-position: center; transition: transform .4s; }
+  .pick-card:hover .pick-bg { transform: scale(1.03); }
+  .pick-overlay { position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(0,0,0,.45) 0%, rgba(0,0,0,.15) 40%, rgba(0,0,0,.6) 100%); }
+  /* Contenu au-dessus */
+  .pick-content { position: absolute; inset: 0; padding: 16px; display: flex; flex-direction: column; justify-content: space-between; }
+  /* Haut : avatar + bulle */
+  .pick-top { display: flex; align-items: flex-start; gap: 10px; }
+  .pick-ava-small {
+    width: 40px; height: 40px; border-radius: 50%; overflow: hidden; flex-shrink: 0;
+    background: linear-gradient(135deg, var(--accent), #1a1a2e);
+    display: flex; align-items: center; justify-content: center; font-size: 1.2rem;
+    border: 2px solid rgba(255,255,255,.25); box-shadow: 0 2px 8px rgba(0,0,0,.5);
+  }
+  .pick-ava-small img { width: 100%; height: 100%; object-fit: cover; }
+  .pick-bubble {
+    background: rgba(255,255,255,.92); color: #000; border-radius: 99px;
+    padding: 8px 14px; font-size: .82rem; font-weight: 600; max-width: 200px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    position: relative; line-height: 1.3;
+    box-shadow: 0 2px 8px rgba(0,0,0,.3);
+  }
+  /* Bas : vignette + titre + play */
+  .pick-bottom { display: flex; align-items: flex-end; gap: 12px; }
+  .pick-thumb-img {
+    width: 72px; height: 72px; border-radius: 6px; flex-shrink: 0; overflow: hidden;
+    background: rgba(255,255,255,.1); display: flex; align-items: center; justify-content: center;
+    font-size: 1.6rem; box-shadow: 0 4px 16px rgba(0,0,0,.6);
+  }
+  .pick-thumb-img img { width: 100%; height: 100%; object-fit: cover; }
+  .pick-bottom-info { flex: 1; min-width: 0; }
+  .pick-title { font-size: 1rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 1px 4px rgba(0,0,0,.7); }
+  .pick-meta { font-size: .78rem; color: rgba(255,255,255,.7); margin-top: 3px; font-weight: 500; }
+  .pick-play { width: 48px; height: 48px; border-radius: 50%; background: var(--green); border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; opacity: 0; transform: translateY(8px); transition: opacity .2s, transform .2s; box-shadow: 0 4px 16px rgba(0,0,0,.5); }
   .pick-card:hover .pick-play { opacity: 1; transform: translateY(0); }
-  .pick-info { padding: 14px; }
-  .pick-badge { font-size: .68rem; font-weight: 700; color: var(--text2); text-transform: uppercase; letter-spacing: .1em; margin-bottom: 4px; }
-  .pick-title { font-size: .95rem; font-weight: 700; }
-  .pick-meta { font-size: .78rem; color: var(--text2); margin-top: 3px; }
-  .pick-msg-input { width: 100%; background: var(--bg3); border: 1px solid var(--border); border-radius: 4px; color: #fff; padding: 8px 10px; font-size: .8rem; font-family: inherit; resize: none; outline: none; margin-top: 6px; }
+  .pick-no-pick { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--text3); font-size: .85rem; }
+  .pick-msg-input { width: 100%; background: var(--bg3); border: 1px solid var(--border); border-radius: 4px; color: #fff; padding: 8px 10px; font-size: .8rem; font-family: inherit; resize: none; outline: none; }
   .pick-msg-input:focus { border-color: var(--text2); }
 
   /* ── DISCOGRAPHIE ── */
@@ -303,24 +329,20 @@
       <div class="artist-pick">
         <div class="section-title">Mise en avant</div>
         <div class="pick-card" id="pickCard" onclick="jouerPick()">
-          <div id="pickCoverWrap">
-            <div class="pick-cover-placeholder" id="pickPlaceholder">🎵</div>
+          <!-- Fond cover -->
+          <div class="pick-bg" id="pickBg"></div>
+          <div class="pick-overlay"></div>
+          <!-- Contenu -->
+          <div class="pick-content" id="pickContent">
+            <div class="pick-no-pick" id="pickNoPick">Sélectionner un son ci-dessous</div>
           </div>
-          <div class="pick-info">
-            <div class="pick-badge">Choix de l'artiste</div>
-            <div class="pick-title" id="pickTitle">Sélectionner un son</div>
-            <div class="pick-meta" id="pickMeta">–</div>
-          </div>
-          <button class="pick-play" onclick="event.stopPropagation();jouerPick()">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-          </button>
         </div>
-        <div style="display:flex;gap:8px;align-items:center;margin-top:4px">
+        <div style="display:flex;gap:8px;align-items:center">
           <select id="pickSelect" style="flex:1;background:var(--bg3);border:1px solid var(--border);color:#fff;padding:7px 10px;border-radius:4px;font-size:.8rem;outline:none;" onchange="changerPick(this.value)">
             <option value="">— Choisir le son mis en avant —</option>
           </select>
         </div>
-        <textarea class="pick-msg-input" id="pickMsg" placeholder="Message de l'artiste (optionnel)…" rows="2"></textarea>
+        <textarea class="pick-msg-input" id="pickMsg" placeholder="Message de l'artiste (optionnel)…" rows="2" oninput="mettreAJourBulle(this.value)"></textarea>
       </div>
     </div>
 
@@ -537,9 +559,11 @@ function render() {
     const opt = [...sel.options].find(o => decodeURIComponent(o.value) === data._savedPickSon);
     if (opt) {
       sel.value = opt.value;
-      changerPick(opt.value);
       const msgEl = document.getElementById('pickMsg');
       if (msgEl && data._savedPickMsg) msgEl.value = data._savedPickMsg;
+      // Rendu avec message
+      const s = sons.find(x => x.nom === data._savedPickSon);
+      if (s) { pickSon = s; _renderPickCard(s, data._savedPickMsg || ''); }
     }
   }
 
@@ -621,17 +645,61 @@ function filtrerParAlbum(albEnc) {
 // ── ARTIST PICK ─────────────────────────────────────────────────────────────
 
 function changerPick(nomEnc) {
-  if (!nomEnc) return;
+  if (!nomEnc) { _renderPickVide(); return; }
   const s = sons.find(x => encodeURIComponent(x.nom) === nomEnc);
   if (!s) return;
   pickSon = s;
-  document.getElementById('pickTitle').textContent = s.titre;
-  document.getElementById('pickMeta').textContent  = s.album ? `${s.album} · ${s.annee || '–'}` : (s.annee || '–');
-  const wrap = document.getElementById('pickCoverWrap');
-  wrap.innerHTML = s.cover_url
-    ? `<div class="pick-cover"><img src="${s.cover_url}" onerror="this.parentElement.innerHTML='🎵'" alt=""></div>`
-    : `<div class="pick-cover-placeholder">🎵</div>`;
-  wrap.querySelector('.pick-cover, .pick-cover-placeholder').style.cssText += ';position:relative';
+  _renderPickCard(s, document.getElementById('pickMsg').value.trim());
+}
+
+function mettreAJourBulle(msg) {
+  const el = document.getElementById('pickBubble');
+  if (el) el.textContent = msg.trim() || '♪';
+}
+
+function _renderPickVide() {
+  pickSon = null;
+  document.getElementById('pickBg').style.backgroundImage = '';
+  document.getElementById('pickContent').innerHTML = '<div class="pick-no-pick">Sélectionner un son ci-dessous</div>';
+}
+
+function _renderPickCard(s, msg) {
+  // Fond cover
+  if (s.cover_url) document.getElementById('pickBg').style.backgroundImage = `url('${s.cover_url}')`;
+
+  // Avatar de l'artiste (photo de profil ou emoji)
+  const avatarHtml = (profilInfo && profilInfo.photo_avatar)
+    ? `<img src="${profilInfo.photo_avatar}" alt="" onerror="this.parentElement.innerHTML='🎤'">`
+    : '🎤';
+
+  // Bulle message
+  const bulle = msg || '♪';
+
+  // Vignette du son
+  const thumbHtml = s.cover_url
+    ? `<img src="${s.cover_url}" onerror="this.parentElement.innerHTML='🎵'" alt="">`
+    : '🎵';
+
+  // Type (Album / EP / Single)
+  const typeLabel = s.type_sortie
+    ? ({ album: 'Album', ep: 'EP', single: 'Single' }[s.type_sortie] || s.type_sortie)
+    : (s.album || '–');
+
+  document.getElementById('pickContent').innerHTML = `
+    <div class="pick-top">
+      <div class="pick-ava-small">${avatarHtml}</div>
+      <div class="pick-bubble" id="pickBubble">${bulle}</div>
+    </div>
+    <div class="pick-bottom">
+      <div class="pick-thumb-img">${thumbHtml}</div>
+      <div class="pick-bottom-info">
+        <div class="pick-title">${s.titre}</div>
+        <div class="pick-meta">${typeLabel}</div>
+      </div>
+      <button class="pick-play" onclick="event.stopPropagation();jouerPick()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      </button>
+    </div>`;
 }
 
 function jouerPick() { if (pickSon) { const i = sons.indexOf(pickSon); if (i >= 0) play(i); } }
