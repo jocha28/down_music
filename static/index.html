@@ -243,6 +243,38 @@
   .player-src { font-size: .75rem; color: var(--text3); }
   audio { flex: 2; min-width: 200px; accent-color: var(--accent2); }
 
+  /* ── LYRICS MODAL ── */
+  .lyrics-modal {
+    position: fixed; inset: 0; background: rgba(0,0,0,.75);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 200; padding: 24px;
+  }
+  .lyrics-box {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 24px;
+    max-width: 600px; width: 100%; display: flex; flex-direction: column;
+    max-height: 80vh;
+  }
+  .lyrics-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 16px; flex-shrink: 0;
+  }
+  .lyrics-scroll {
+    overflow-y: auto; flex: 1;
+    scrollbar-width: thin; scrollbar-color: var(--border) transparent;
+  }
+  .lrc-line {
+    padding: 7px 12px; border-radius: var(--radius-sm);
+    font-size: .9rem; color: var(--text3); cursor: pointer;
+    transition: color .2s, background .2s; line-height: 1.6;
+  }
+  .lrc-line:hover { color: var(--text); background: var(--bg3); }
+  .lrc-line.active {
+    color: var(--accent2); font-weight: 600;
+    background: rgba(124,58,237,.12);
+  }
+  .lrc-line.passe { color: var(--text2); }
+
   @media (max-width: 600px) {
     main { padding: 16px; }
     .songs-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
@@ -696,22 +728,108 @@ function fermerPlayer() {
   document.getElementById('miniPlayer').classList.remove('active');
 }
 
+// ── LYRICS LRC ─────────────────────────────────────────────────────────────
+
+function _parseLRC(text) {
+  const lignes = [];
+  const re = /\[(\d{2}):(\d{2})[.:](\d{2})\](.*)/;
+  for (const ligne of text.split('\n')) {
+    const m = ligne.match(re);
+    if (m) {
+      const t = parseInt(m[1]) * 60 + parseInt(m[2]) + parseInt(m[3]) / 100;
+      const txt = m[4].trim();
+      if (txt) lignes.push({ t, txt });
+    }
+  }
+  return lignes;
+}
+
+function _indexActif(lignes, temps) {
+  let idx = -1;
+  for (let i = 0; i < lignes.length; i++) {
+    if (lignes[i].t <= temps) idx = i;
+    else break;
+  }
+  return idx;
+}
+
 async function voirLyrics(nomEncode) {
   const nom = decodeURIComponent(nomEncode);
   try {
     const r = await api('GET', `/fichiers/${encodeURIComponent(nom)}/lyrics`);
-    const pre = document.createElement('pre');
-    pre.style.cssText = 'white-space:pre-wrap;font-size:.8rem;color:var(--text2);max-height:60vh;overflow:auto;';
-    pre.textContent = r.lyrics;
+    const texte = r.lyrics || '';
+    const lignes = _parseLRC(texte);
+    const estLRC = lignes.length > 0;
+
     const modal = document.createElement('div');
-    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:200;padding:24px;';
+    modal.className = 'lyrics-modal';
+
     const box = document.createElement('div');
-    box.style.cssText = 'background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:24px;max-width:600px;width:100%;';
-    box.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px"><b>${nom.replace('.mp3','')}</b><button class="btn btn-secondary btn-sm" onclick="this.closest('[style*=fixed]').remove()">✕</button></div>`;
-    box.appendChild(pre);
+    box.className = 'lyrics-box';
+    box.innerHTML = `
+      <div class="lyrics-header">
+        <b>${nom.replace('.mp3','')}</b>
+        <button class="btn btn-secondary btn-sm" id="btnFermerLyrics">✕</button>
+      </div>`;
+
+    const scroll = document.createElement('div');
+    scroll.className = 'lyrics-scroll';
+
+    if (estLRC) {
+      lignes.forEach((l, i) => {
+        const div = document.createElement('div');
+        div.className = 'lrc-line';
+        div.dataset.idx = i;
+        div.textContent = l.txt;
+        div.onclick = () => {
+          const audio = document.getElementById('audioPlayer');
+          if (audio.src) { audio.currentTime = l.t; audio.play(); }
+        };
+        scroll.appendChild(div);
+      });
+    } else {
+      const pre = document.createElement('pre');
+      pre.style.cssText = 'white-space:pre-wrap;font-size:.85rem;color:var(--text2);line-height:1.7;';
+      pre.textContent = texte;
+      scroll.appendChild(pre);
+    }
+
+    box.appendChild(scroll);
     modal.appendChild(box);
     document.body.appendChild(modal);
-    modal.onclick = e => { if (e.target === modal) modal.remove(); };
+
+    // Fermeture
+    const fermer = () => {
+      audio.removeEventListener('timeupdate', sync);
+      modal.remove();
+    };
+    box.querySelector('#btnFermerLyrics').onclick = fermer;
+    modal.onclick = e => { if (e.target === modal) fermer(); };
+
+    // Scroll synchronisé si LRC
+    if (!estLRC) return;
+    const audio = document.getElementById('audioPlayer');
+    let dernierIdx = -1;
+
+    const sync = () => {
+      const idx = _indexActif(lignes, audio.currentTime);
+      if (idx === dernierIdx) return;
+      dernierIdx = idx;
+
+      scroll.querySelectorAll('.lrc-line').forEach((el, i) => {
+        el.classList.toggle('active', i === idx);
+        el.classList.toggle('passe', i < idx);
+      });
+
+      if (idx >= 0) {
+        const actif = scroll.querySelector(`.lrc-line[data-idx="${idx}"]`);
+        if (actif) actif.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    };
+
+    audio.addEventListener('timeupdate', sync);
+    sync(); // état initial
+
   } catch(e) { toast('Lyrics non disponibles', 'error'); }
 }
 
