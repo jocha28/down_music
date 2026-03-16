@@ -124,31 +124,41 @@ class ClientSonauto:
     # ── Sons likés via Supabase PostgREST ─────────────────────────────────────
 
     async def lister_sons_likes(self) -> list[Son]:
-        """Récupère les sons likés (favorite=true) depuis la table tracks."""
+        """Récupère TOUS les sons likés en paginant par pages de 1000."""
+        PAGE = 1000
+        tous: list[dict] = []
+        offset = 0
         try:
-            r = await self._client.get(
-                f"{SUPABASE_URL}/rest/v1/tracks",
-                params={
-                    "select":   "id,title,song_path,generation_id,lyrics_id,favorite,deleted",
-                    "favorite": "eq.true",
-                    "deleted":  "eq.false",
-                    "order":    "created_at.desc",
-                    "limit":    "200",
-                },
-                headers=self._headers_supa,
-                timeout=20,
-            )
-            if r.status_code == 401:
-                raise PermissionError("Token invalide ou expiré")
-            if r.status_code == 200:
-                data = r.json()
-                if isinstance(data, list) and data:
-                    return [_normaliser_son(s) for s in data]
+            while True:
+                r = await self._client.get(
+                    f"{SUPABASE_URL}/rest/v1/tracks",
+                    params={
+                        "select":   "id,title,song_path,generation_id,lyrics_id,favorite,deleted",
+                        "favorite": "eq.true",
+                        "deleted":  "eq.false",
+                        "order":    "created_at.desc",
+                        "limit":    str(PAGE),
+                        "offset":   str(offset),
+                    },
+                    headers=self._headers_supa,
+                    timeout=20,
+                )
+                if r.status_code == 401:
+                    raise PermissionError("Token invalide ou expiré")
+                if r.status_code != 200:
+                    break
+                page = r.json()
+                if not isinstance(page, list) or not page:
+                    break
+                tous.extend(page)
+                if len(page) < PAGE:
+                    break          # dernière page, on a tout
+                offset += PAGE
         except PermissionError:
             raise
         except Exception:
             pass
-        return []
+        return [_normaliser_son(s) for s in tous]
 
     # ── Lyrics ────────────────────────────────────────────────────────────────
 
