@@ -453,7 +453,8 @@ async def profil_artiste(nom: str):
         artiste_fichier = info["artiste"] or "Inconnu"
         if artiste_fichier.lower() != nom.lower():
             continue
-        info["cover_url"] = f"/api/fichiers/{mp3.name}/cover" if info["cover"] else None
+        mtime = int(mp3.stat().st_mtime)
+        info["cover_url"] = f"/api/fichiers/{mp3.name}/cover?v={mtime}" if info["cover"] else None
         info["audio_url"] = f"/api/fichiers/{mp3.name}"
         sons.append(info)
         if info["album"]:
@@ -472,7 +473,7 @@ async def profil_artiste(nom: str):
             piste_num = int(info["piste"]) if info["piste"].isdigit() else 999
             alb["pistes"].append({"nom": mp3.name, "titre": info["titre"], "piste": piste_num})
             if alb["cover"] is None and info["cover"]:
-                alb["cover"] = f"/api/fichiers/{mp3.name}/cover"
+                alb["cover"] = f"/api/fichiers/{mp3.name}/cover?v={int(mp3.stat().st_mtime)}"
 
     # Trier les sons : piste si disponible, sinon titre
     sons.sort(key=lambda s: (s["album"], int(s["piste"]) if s["piste"].isdigit() else 999, s["titre"]))
@@ -634,7 +635,8 @@ async def profil_artiste(nom: str):
         info = _lire_tags_mp3(mp3)
         if (info["artiste"] or "Inconnu").lower() != nom.lower():
             continue
-        info["cover_url"]  = f"/api/fichiers/{mp3.name}/cover" if info["cover"] else None
+        mtime = int(mp3.stat().st_mtime)
+        info["cover_url"]  = f"/api/fichiers/{mp3.name}/cover?v={mtime}" if info["cover"] else None
         info["audio_url"]  = f"/api/fichiers/{mp3.name}"
         sons.append(info)
         if info["album"]:
@@ -644,7 +646,7 @@ async def profil_artiste(nom: str):
             n = int(info["piste"]) if info["piste"].isdigit() else 999
             alb["pistes"].append({"nom": mp3.name, "titre": info["titre"], "piste": n})
             if alb["cover"] is None and info["cover"]:
-                alb["cover"] = f"/api/fichiers/{mp3.name}/cover"
+                alb["cover"] = f"/api/fichiers/{mp3.name}/cover?v={int(mp3.stat().st_mtime)}"
     sons.sort(key=lambda s: (s["album"], int(s["piste"]) if s["piste"].isdigit() else 999, s["titre"]))
     albums_list = sorted(albums.values(), key=lambda a: a["annee"] or "0000", reverse=True)
     for a in albums_list:
@@ -803,13 +805,22 @@ async def synchroniser_tags(request: Request):
     tags=["Fichiers"],
     summary="Retourner la cover art d'un fichier MP3",
 )
-async def obtenir_cover(nom_fichier: str):
+async def obtenir_cover(nom_fichier: str, request: Request):
     from mutagen.id3 import ID3, ID3NoHeaderError
     from fastapi.responses import Response
+    import hashlib
 
     chemin = DOSSIER_MUSIQUES / nom_fichier
     if not chemin.exists() or not chemin.is_file():
         raise HTTPException(status_code=404, detail="Fichier non trouvé")
+
+    # ETag basé sur la date de modification du fichier
+    mtime = int(chemin.stat().st_mtime)
+    etag = f'"{hashlib.md5(f"{nom_fichier}{mtime}".encode()).hexdigest()}"'
+
+    if request.headers.get("if-none-match") == etag:
+        from fastapi.responses import Response as R
+        return R(status_code=304)
 
     try:
         tags = ID3(str(chemin))
@@ -821,7 +832,10 @@ async def obtenir_cover(nom_fichier: str):
             return Response(
                 content=frame.data,
                 media_type=frame.mime or "image/jpeg",
-                headers={"Cache-Control": "public, max-age=86400"},
+                headers={
+                    "Cache-Control": "public, max-age=31536000, immutable",
+                    "ETag": etag,
+                },
             )
 
     raise HTTPException(status_code=404, detail="Pas de cover")
