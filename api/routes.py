@@ -524,6 +524,85 @@ def _lire_tags_mp3(chemin: Path) -> dict:
     return result
 
 
+DOSSIER_PROFILS = Path("data/profils")
+
+def _chemin_profil(nom: str) -> Path:
+    import re
+    slug = re.sub(r'[^a-z0-9_-]', '_', nom.lower())[:60]
+    return DOSSIER_PROFILS / f"{slug}.json"
+
+def _charger_profil(nom: str) -> dict:
+    chemin = _chemin_profil(nom)
+    if chemin.exists():
+        import json as _json
+        try:
+            return _json.loads(chemin.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return {}
+
+def _sauver_profil(nom: str, data: dict) -> None:
+    import json as _json
+    DOSSIER_PROFILS.mkdir(parents=True, exist_ok=True)
+    _chemin_profil(nom).write_text(_json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+@router.get("/artistes/{nom}/info", tags=["Artistes"], summary="Charger le profil complet d'un artiste")
+async def charger_profil_artiste(nom: str):
+    return _charger_profil(nom)
+
+
+@router.post("/artistes/{nom}/info", tags=["Artistes"], summary="Sauvegarder le profil d'un artiste")
+async def sauver_profil_artiste(
+    nom: str,
+    nom_affiche:    str | None = Form(None),
+    bio:            str | None = Form(None),
+    genre:          str | None = Form(None),
+    ville:          str | None = Form(None),
+    site_web:       str | None = Form(None),
+    instagram:      str | None = Form(None),
+    youtube:        str | None = Form(None),
+    tiktok:         str | None = Form(None),
+    twitter:        str | None = Form(None),
+    pick_son:       str | None = Form(None),   # nom du fichier mp3 mis en avant
+    pick_message:   str | None = Form(None),
+    photo_avatar:   UploadFile | None = None,
+    photo_banniere: UploadFile | None = None,
+):
+    import base64 as _b64
+    profil = _charger_profil(nom)
+
+    def _set(key, val):
+        if val is not None:
+            profil[key] = val.strip() if isinstance(val, str) else val
+
+    _set("nom_affiche",  nom_affiche)
+    _set("bio",          bio)
+    _set("genre",        genre)
+    _set("ville",        ville)
+    _set("site_web",     site_web)
+    _set("instagram",    instagram)
+    _set("youtube",      youtube)
+    _set("tiktok",       tiktok)
+    _set("twitter",      twitter)
+    _set("pick_son",     pick_son)
+    _set("pick_message", pick_message)
+
+    # Photos → stockées en base64 dans le JSON
+    if photo_avatar is not None and photo_avatar.filename:
+        contenu = await photo_avatar.read()
+        mime = photo_avatar.content_type or "image/jpeg"
+        profil["photo_avatar"] = f"data:{mime};base64,{_b64.b64encode(contenu).decode()}"
+
+    if photo_banniere is not None and photo_banniere.filename:
+        contenu = await photo_banniere.read()
+        mime = photo_banniere.content_type or "image/jpeg"
+        profil["photo_banniere"] = f"data:{mime};base64,{_b64.b64encode(contenu).decode()}"
+
+    _sauver_profil(nom, profil)
+    return {"message": "Profil sauvegardé", "champs": list(profil.keys())}
+
+
 @router.get("/artistes", tags=["Artistes"], summary="Lister tous les artistes avec statistiques")
 async def lister_artistes():
     if not DOSSIER_MUSIQUES.exists():

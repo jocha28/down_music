@@ -238,6 +238,7 @@
   </div>
   <span class="topbar-title" id="topTitle"></span>
   <div class="topbar-right">
+    <a href="#" class="topbar-link" id="editProfilLink" style="display:none" onclick="ouvrirEditeur()">Modifier le profil</a>
     <a href="/static/album.html" class="topbar-link">Albums</a>
     <a href="/static/editeur.html" class="topbar-link">Éditeur</a>
     <a href="/" class="topbar-link">Accueil</a>
@@ -400,6 +401,7 @@
 <script>
 const API = '';
 let data      = null;   // { nom, sons, albums }
+let profilInfo = {};    // données sauvegardées côté serveur
 let sons      = [];
 let shown     = 10;
 let playIdx   = -1;
@@ -452,47 +454,74 @@ async function load(nomEnc) {
   document.getElementById('picker').style.display = 'none';
   document.getElementById('profile').style.display = 'block';
   try {
-    data = await get(`/artistes/${encodeURIComponent(nom)}/profil`);
+    [data, profilInfo] = await Promise.all([
+      get(`/artistes/${encodeURIComponent(nom)}/profil`),
+      get(`/artistes/${encodeURIComponent(nom)}/info`).catch(() => ({})),
+    ]);
     sons = data.sons;
     render();
     history.replaceState(null, '', `?artiste=${encodeURIComponent(nom)}`);
+    // Afficher le bouton "Modifier le profil"
+    const lien = document.getElementById('editProfilLink');
+    lien.style.display = '';
+    lien._nom = nom;
   } catch(e) { toast('Erreur : ' + e.message); }
+}
+
+function ouvrirEditeur() {
+  const lien = document.getElementById('editProfilLink');
+  const nom = lien._nom || (data && data.nom) || '';
+  window.location.href = `/static/profil_editeur.html?artiste=${encodeURIComponent(nom)}`;
 }
 
 function render() {
   const { nom, sons: s, albums } = data;
 
-  // Topbar + titre
-  document.getElementById('topTitle').textContent = nom;
-  document.getElementById('heroName').textContent  = nom;
-  document.title = nom + ' — Sonauto Downloader';
+  // Stats hero
   document.getElementById('heroListeners').textContent = `${s.length} sons`;
 
-  // Hero image (premier son avec cover)
+  // Hero image : priorité à la photo_banniere du profil, sinon premier son avec cover
   const avecCover = s.find(x => x.cover_url);
-  if (avecCover) {
+  const banniereUrl = profilInfo.photo_banniere || (avecCover && avecCover.cover_url) || '';
+  if (banniereUrl) {
     const img = document.getElementById('heroImg');
-    img.src = avecCover.cover_url;
+    img.src = banniereUrl;
     img.style.display = 'block';
-    document.getElementById('lyricsBg').style.backgroundImage = `url('${avecCover.cover_url}')`;
+    document.getElementById('lyricsBg').style.backgroundImage = `url('${banniereUrl}')`;
   }
 
-  // Bio locale
-  const bioSaved = localStorage.getItem(BIO_KEY + nom) || '';
+  // Nom affiché (depuis le profil si défini)
+  const nomAffiche = profilInfo.nom_affiche || nom;
+  document.getElementById('heroName').textContent  = nomAffiche;
+  document.title = nomAffiche + ' — Sonauto Downloader';
+  document.getElementById('topTitle').textContent = nomAffiche;
+
+  // Bio : priorité profil serveur, sinon localStorage
+  const bioServeur = profilInfo.bio || '';
+  const bioSaved   = bioServeur || localStorage.getItem(BIO_KEY + nom) || '';
   document.getElementById('bioEdit').value = bioSaved;
   document.getElementById('bioPara').textContent = bioSaved || 'Aucune biographie. Cliquez sur Modifier pour en ajouter une.';
   document.getElementById('bioPara').style.color = bioSaved ? 'var(--text2)' : 'var(--text3)';
 
   // Stats About
-  const genres = [...new Set(s.map(x => x.genre).filter(Boolean))];
-  const annees = [...new Set(s.map(x=>x.annee).filter(Boolean))].sort();
   document.getElementById('aboutSons').textContent = `${s.length} sons · ${albums.length} album${albums.length!==1?'s':''}`;
-  // Fond de la carte About = même image que le hero
-  if (avecCover) {
-    document.getElementById('aboutBg').style.backgroundImage = `url('${avecCover.cover_url}')`;
-    document.getElementById('aboutAvaImg').src = avecCover.cover_url;
+
+  // Avatar About : priorité photo_avatar du profil, sinon cover du premier son
+  const avatarUrl = profilInfo.photo_avatar || (avecCover && avecCover.cover_url) || '';
+  const bgUrl     = profilInfo.photo_banniere || (avecCover && avecCover.cover_url) || '';
+  if (bgUrl)     document.getElementById('aboutBg').style.backgroundImage  = `url('${bgUrl}')`;
+  if (avatarUrl) {
+    document.getElementById('aboutAvaImg').src = avatarUrl;
     document.getElementById('aboutAvaImg').style.display = 'block';
     document.getElementById('aboutAvaEmoji').style.display = 'none';
+  }
+
+  // Artist Pick depuis le profil
+  if (profilInfo.pick_son) {
+    const sel = document.getElementById('pickSelect');
+    // sera rempli juste après ; on mémorise pour appliquer après
+    data._savedPickSon = profilInfo.pick_son;
+    data._savedPickMsg = profilInfo.pick_message || '';
   }
 
   // Populaires
@@ -502,6 +531,17 @@ function render() {
   const sel = document.getElementById('pickSelect');
   sel.innerHTML = '<option value="">— Choisir le son mis en avant —</option>' +
     s.map(x => `<option value="${encodeURIComponent(x.nom)}">${x.titre}</option>`).join('');
+
+  // Restaurer le pick depuis le profil serveur
+  if (data._savedPickSon) {
+    const opt = [...sel.options].find(o => decodeURIComponent(o.value) === data._savedPickSon);
+    if (opt) {
+      sel.value = opt.value;
+      changerPick(opt.value);
+      const msgEl = document.getElementById('pickMsg');
+      if (msgEl && data._savedPickMsg) msgEl.value = data._savedPickMsg;
+    }
+  }
 
   // Discographie
   renderDisco('tout');

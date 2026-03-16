@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Éditer le profil — Sonauto Downloader</title>
+<style>
+  :root {
+    --bg: #121212; --bg2: #181818; --bg3: #282828; --bg4: #333;
+    --border: #3a3a3a; --accent: #7c3aed; --accent2: #a855f7;
+    --green: #1db954; --red: #e22134; --yellow: #f59e0b;
+    --text: #fff; --text2: #b3b3b3; --text3: #6a6a6a;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; min-height: 100vh; }
+
+  /* ── HEADER ── */
+  header {
+    position: sticky; top: 0; z-index: 100;
+    height: 64px; background: rgba(18,18,18,.96); backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between; padding: 0 28px;
+  }
+  .logo { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1rem; }
+  .logo svg { color: #1db954; }
+  .header-title { font-size: .9rem; color: var(--text2); font-weight: 400; }
+  .header-actions { display: flex; gap: 10px; align-items: center; }
+  .btn { display: inline-flex; align-items: center; gap: 7px; padding: 9px 20px; border-radius: 99px; border: none; cursor: pointer; font-size: .875rem; font-weight: 700; transition: all .15s; white-space: nowrap; }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .btn-green  { background: var(--green); color: #000; }
+  .btn-green:hover:not(:disabled) { filter: brightness(1.1); transform: scale(1.02); }
+  .btn-ghost  { background: transparent; color: var(--text2); border: 1px solid var(--border); }
+  .btn-ghost:hover  { border-color: var(--text); color: var(--text); }
+  .btn-sm { padding: 6px 14px; font-size: .8rem; }
+
+  /* ── LAYOUT ── */
+  .workspace { display: grid; grid-template-columns: 340px 1fr; gap: 0; min-height: calc(100vh - 64px); }
+  @media (max-width: 860px) { .workspace { grid-template-columns: 1fr; } }
+
+  /* ── APERÇU GAUCHE ── */
+  .preview-col { border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow-y: auto; }
+
+  /* Bannière */
+  .preview-banner {
+    width: 100%; height: 200px; position: relative; overflow: hidden; flex-shrink: 0;
+    background: linear-gradient(135deg, #1a0a3d 0%, #0d1a2e 100%);
+    cursor: pointer;
+  }
+  .preview-banner img { width: 100%; height: 100%; object-fit: cover; position: absolute; inset: 0; }
+  .preview-banner-overlay { position: absolute; inset: 0; background: rgba(0,0,0,.35); display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity .2s; }
+  .preview-banner:hover .preview-banner-overlay { opacity: 1; }
+  .preview-banner-hint { color: #fff; font-size: .8rem; font-weight: 600; background: rgba(0,0,0,.6); padding: 8px 16px; border-radius: 99px; display: flex; align-items: center; gap: 6px; }
+
+  /* Avatar */
+  .preview-avatar-wrap { padding: 0 24px; margin-top: -50px; position: relative; z-index: 2; margin-bottom: 4px; }
+  .preview-avatar {
+    width: 100px; height: 100px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), #1a1a2e);
+    border: 4px solid var(--bg); overflow: hidden;
+    display: flex; align-items: center; justify-content: center; font-size: 2.5rem;
+    cursor: pointer; position: relative; box-shadow: 0 4px 20px rgba(0,0,0,.5);
+  }
+  .preview-avatar img { width: 100%; height: 100%; object-fit: cover; position: absolute; inset: 0; }
+  .preview-avatar-overlay { position: absolute; inset: 0; border-radius: 50%; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity .2s; }
+  .preview-avatar:hover .preview-avatar-overlay { opacity: 1; }
+
+  /* Info preview */
+  .preview-info { padding: 8px 24px 24px; }
+  .preview-name { font-size: 1.4rem; font-weight: 900; letter-spacing: -.01em; margin-bottom: 4px; }
+  .preview-ville { font-size: .8rem; color: var(--text3); margin-bottom: 12px; }
+  .preview-bio { font-size: .82rem; color: var(--text2); line-height: 1.6; margin-bottom: 14px; }
+  .preview-socials { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+  .social-tag { display: flex; align-items: center; gap: 5px; font-size: .75rem; background: var(--bg3); color: var(--text2); padding: 4px 10px; border-radius: 99px; text-decoration: none; }
+  .social-tag:hover { color: #fff; }
+  .preview-genre { font-size: .75rem; color: var(--text3); }
+  .preview-label { font-size: .65rem; text-transform: uppercase; letter-spacing: .1em; color: var(--text3); margin-top: 16px; margin-bottom: 6px; font-weight: 600; }
+
+  /* Pick preview */
+  .pick-preview {
+    margin: 0 16px 16px; background: var(--bg3); border-radius: var(--radius); overflow: hidden;
+    display: none;
+  }
+  .pick-preview.visible { display: block; }
+  .pick-preview-cover { width: 100%; height: 120px; overflow: hidden; position: relative; background: var(--bg2); }
+  .pick-preview-cover img { width: 100%; height: 100%; object-fit: cover; }
+  .pick-preview-info { padding: 10px 12px; }
+  .pick-preview-badge { font-size: .65rem; text-transform: uppercase; letter-spacing: .1em; color: var(--text3); margin-bottom: 3px; }
+  .pick-preview-title { font-size: .875rem; font-weight: 700; }
+  .pick-preview-msg { font-size: .75rem; color: var(--text2); margin-top: 4px; font-style: italic; }
+
+  /* ── FORMULAIRE DROITE ── */
+  .form-col { overflow-y: auto; padding: 32px; display: flex; flex-direction: column; gap: 32px; }
+
+  .form-section { display: flex; flex-direction: column; gap: 16px; }
+  .form-section-title { font-size: .7rem; text-transform: uppercase; letter-spacing: .12em; color: var(--text3); font-weight: 700; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field-label { font-size: .78rem; font-weight: 600; color: var(--text2); }
+  .field-hint { font-size: .72rem; color: var(--text3); margin-top: -2px; }
+  .field-input {
+    background: var(--bg3); border: 1px solid var(--border); border-radius: 6px;
+    color: #fff; padding: 10px 14px; font-size: .875rem; outline: none; font-family: inherit;
+    transition: border-color .2s; width: 100%;
+  }
+  .field-input:focus { border-color: var(--text2); }
+  .field-input::placeholder { color: var(--text3); }
+  textarea.field-input { resize: vertical; min-height: 90px; line-height: 1.6; }
+  .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+  /* Photo upload zones */
+  .photo-zone {
+    width: 100%; height: 160px; border: 2px dashed var(--border); border-radius: var(--radius);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    cursor: pointer; transition: border-color .2s, background .2s; position: relative; overflow: hidden;
+    background: var(--bg2);
+  }
+  .photo-zone:hover { border-color: var(--text2); background: var(--bg3); }
+  .photo-zone img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .photo-zone-label { font-size: .8rem; color: var(--text3); margin-top: 8px; }
+  .photo-zone-icon { font-size: 1.8rem; }
+  .photo-overlay { position: absolute; inset: 0; background: rgba(0,0,0,.5); display: flex; flex-direction: column; align-items: center; justify-content: center; opacity: 0; transition: opacity .2s; color: #fff; font-size: .8rem; font-weight: 600; gap: 6px; }
+  .photo-zone:hover .photo-overlay { opacity: 1; }
+  .photo-zone.avatar-zone { width: 120px; height: 120px; border-radius: 50%; }
+  .photo-zone.avatar-zone img { border-radius: 50%; }
+
+  /* Socials grid */
+  .socials-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .social-field { display: flex; align-items: center; gap: 8px; }
+  .social-icon { font-size: 1.1rem; flex-shrink: 0; width: 28px; text-align: center; }
+
+  /* Pick select */
+  .pick-select { background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; color: #fff; padding: 10px 14px; font-size: .875rem; outline: none; width: 100%; cursor: pointer; }
+  .pick-select:focus { border-color: var(--text2); }
+
+  /* ── PROGRESS SAVE ── */
+  .save-progress { display: none; align-items: center; gap: 10px; font-size: .85rem; color: var(--text2); }
+  .save-progress.visible { display: flex; }
+  .save-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); animation: pulse 1s ease infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+
+  /* ── TOAST ── */
+  #toasts { position: fixed; bottom: 24px; right: 24px; display: flex; flex-direction: column; gap: 8px; z-index: 500; }
+  .toast { background: var(--bg3); border-radius: 6px; padding: 12px 16px; font-size: .85rem; max-width: 300px; box-shadow: 0 8px 24px rgba(0,0,0,.5); animation: tin .2s; }
+  .toast.success { border-left: 3px solid var(--green); }
+  .toast.error   { border-left: 3px solid var(--red); }
+  @keyframes tin { from { transform: translateY(12px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+  .spin { animation: sp .8s linear infinite; display: inline-block; }
+  @keyframes sp { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+    Sonauto Downloader
+  </div>
+  <span class="header-title" id="headerTitle">Profil artiste</span>
+  <div class="header-actions">
+    <div class="save-progress" id="saveProgress">
+      <div class="save-dot"></div> Enregistrement…
+    </div>
+    <button class="btn btn-ghost btn-sm" onclick="history.back()">Annuler</button>
+    <button class="btn btn-green" id="btnSave" onclick="sauvegarder()">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+      Enregistrer
+    </button>
+  </div>
+</header>
+
+<!-- INPUTS CACHÉS -->
+<input type="file" id="inputBanniere" accept="image/*" style="display:none" onchange="previewBanniere(this)">
+<input type="file" id="inputAvatar"   accept="image/*" style="display:none" onchange="previewAvatar(this)">
+
+<div class="workspace">
+
+  <!-- ── APERÇU ── -->
+  <div class="preview-col">
+
+    <!-- Bannière -->
+    <div class="preview-banner" id="prevBanniere" onclick="document.getElementById('inputBanniere').click()">
+      <img id="prevBanniereImg" src="" alt="" style="display:none">
+      <div class="preview-banner-overlay">
+        <div class="preview-banner-hint">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+          Changer la bannière
+        </div>
+      </div>
+    </div>
+
+    <!-- Avatar -->
+    <div class="preview-avatar-wrap">
+      <div class="preview-avatar" id="prevAvatar" onclick="document.getElementById('inputAvatar').click()">
+        <span id="prevAvaEmoji">🎤</span>
+        <img id="prevAvaImg" src="" alt="" style="display:none">
+        <div class="preview-avatar-overlay">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- Infos preview -->
+    <div class="preview-info">
+      <div class="preview-name" id="prevNom">Nom de l'artiste</div>
+      <div class="preview-ville" id="prevVille"></div>
+      <div class="preview-bio" id="prevBio" style="display:none"></div>
+      <div class="preview-socials" id="prevSocials"></div>
+      <div class="preview-genre" id="prevGenre"></div>
+    </div>
+
+    <!-- Artist pick preview -->
+    <div class="preview-label" style="padding: 0 16px">Mise en avant</div>
+    <div class="pick-preview" id="pickPreview">
+      <div class="pick-preview-cover"><img id="pickPrevImg" src="" alt="" onerror="this.style.display='none'"></div>
+      <div class="pick-preview-info">
+        <div class="pick-preview-badge">Choix de l'artiste</div>
+        <div class="pick-preview-title" id="pickPrevTitle">–</div>
+        <div class="pick-preview-msg" id="pickPrevMsg" style="display:none"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── FORMULAIRE ── -->
+  <div class="form-col">
+
+    <!-- Sélecteur artiste (si plusieurs) -->
+    <div class="form-section" id="artisteSelectSection" style="display:none">
+      <div class="form-section-title">Artiste</div>
+      <div class="field">
+        <label class="field-label">Choisir l'artiste à éditer</label>
+        <select class="pick-select" id="artisteSelect" onchange="chargerArtiste(this.value)">
+          <option value="">Chargement…</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Identité -->
+    <div class="form-section">
+      <div class="form-section-title">Identité</div>
+      <div class="field">
+        <label class="field-label">Nom affiché</label>
+        <input class="field-input" type="text" id="fNom" placeholder="Ex : Jocha" oninput="document.getElementById('prevNom').textContent=this.value||'Nom de l\'artiste'">
+      </div>
+      <div class="row-2">
+        <div class="field">
+          <label class="field-label">Genre musical</label>
+          <input class="field-input" type="text" id="fGenre" placeholder="Rap, Gospel, Drill…" oninput="document.getElementById('prevGenre').textContent=this.value">
+        </div>
+        <div class="field">
+          <label class="field-label">Ville / Pays</label>
+          <input class="field-input" type="text" id="fVille" placeholder="Paris, France" oninput="updateVille(this.value)">
+        </div>
+      </div>
+      <div class="field">
+        <label class="field-label">Biographie</label>
+        <div class="field-hint">Raconte ton histoire, ton style, tes influences…</div>
+        <textarea class="field-input" id="fBio" placeholder="Ex : Artiste originaire de…" oninput="updateBio(this.value)"></textarea>
+      </div>
+      <div class="field">
+        <label class="field-label">Site web</label>
+        <input class="field-input" type="url" id="fSiteWeb" placeholder="https://monsite.com">
+      </div>
+    </div>
+
+    <!-- Photos -->
+    <div class="form-section">
+      <div class="form-section-title">Photos</div>
+      <div class="field">
+        <label class="field-label">Photo de profil (avatar)</label>
+        <div style="display:flex;gap:16px;align-items:center">
+          <div class="photo-zone avatar-zone" onclick="document.getElementById('inputAvatar').click()">
+            <span id="fAvaEmoji" style="font-size:2rem">🎤</span>
+            <img id="fAvaImg" src="" alt="" style="display:none">
+            <div class="photo-overlay">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+              Changer
+            </div>
+          </div>
+          <div style="font-size:.78rem;color:var(--text3);line-height:1.6">Recommandé : 500×500 px<br>Format carré, JPG ou PNG<br>Apparaît comme avatar circulaire</div>
+        </div>
+      </div>
+      <div class="field">
+        <label class="field-label">Photo bannière (hero)</label>
+        <div class="photo-zone" onclick="document.getElementById('inputBanniere').click()">
+          <span id="fBanEmoji" class="photo-zone-icon">🖼️</span>
+          <span class="photo-zone-label" id="fBanLabel">Cliquer pour choisir une image</span>
+          <img id="fBanImg" src="" alt="" style="display:none">
+          <div class="photo-overlay">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+            Changer la bannière
+          </div>
+        </div>
+        <div class="field-hint">Recommandé : 1400×400 px — image large en haut du profil</div>
+      </div>
+    </div>
+
+    <!-- Réseaux sociaux -->
+    <div class="form-section">
+      <div class="form-section-title">Réseaux sociaux</div>
+      <div class="socials-grid">
+        <div class="field social-field">
+          <span class="social-icon">📸</span>
+          <input class="field-input" type="text" id="fInstagram" placeholder="@username">
+        </div>
+        <div class="field social-field">
+          <span class="social-icon">▶️</span>
+          <input class="field-input" type="text" id="fYoutube" placeholder="chaîne YouTube">
+        </div>
+        <div class="field social-field">
+          <span class="social-icon">🎵</span>
+          <input class="field-input" type="text" id="fTiktok" placeholder="@username">
+        </div>
+        <div class="field social-field">
+          <span class="social-icon">𝕏</span>
+          <input class="field-input" type="text" id="fTwitter" placeholder="@username">
+        </div>
+      </div>
+    </div>
+
+    <!-- Mise en avant -->
+    <div class="form-section">
+      <div class="form-section-title">Mise en avant (Artist pick)</div>
+      <div class="field">
+        <label class="field-label">Son mis en avant</label>
+        <select class="pick-select" id="fPickSon" onchange="updatePickPreview(this.value)">
+          <option value="">— Aucun —</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="field-label">Message de l'artiste</label>
+        <textarea class="field-input" id="fPickMsg" placeholder="Ex : Mon dernier son, écoutez !" rows="2" oninput="updatePickMsg(this.value)"></textarea>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div id="toasts"></div>
+
+<script>
+const API = '';
+let nomArtiste   = '';
+let sonsMp3      = [];   // liste des MP3 disponibles
+let avatarFile   = null;
+let banniereFile = null;
+
+// ── UTILS ──────────────────────────────────────────────────────────────────
+
+function toast(msg, type = 'info') {
+  const el = document.createElement('div'); el.className = `toast ${type}`; el.textContent = msg;
+  document.getElementById('toasts').appendChild(el); setTimeout(() => el.remove(), 3500);
+}
+async function get(path) {
+  const r = await fetch(API + '/api' + path); if (!r.ok) throw new Error(r.statusText); return r.json();
+}
+
+// ── PREVIEW LIVE ───────────────────────────────────────────────────────────
+
+function updateVille(v) {
+  const el = document.getElementById('prevVille');
+  el.textContent = v; el.style.display = v ? '' : 'none';
+}
+function updateBio(v) {
+  const el = document.getElementById('prevBio');
+  el.textContent = v; el.style.display = v ? '' : 'none';
+}
+function updatePickMsg(v) {
+  const el = document.getElementById('pickPrevMsg');
+  el.textContent = v; el.style.display = v ? '' : 'none';
+}
+
+function updateSocialsPreview() {
+  const socials = [
+    { id: 'fInstagram', label: '📸 Instagram' },
+    { id: 'fYoutube',   label: '▶️ YouTube' },
+    { id: 'fTiktok',    label: '🎵 TikTok' },
+    { id: 'fTwitter',   label: '𝕏 Twitter' },
+  ];
+  const el = document.getElementById('prevSocials');
+  el.innerHTML = socials
+    .filter(s => document.getElementById(s.id).value.trim())
+    .map(s => `<span class="social-tag">${s.label}</span>`)
+    .join('');
+}
+['fInstagram','fYoutube','fTiktok','fTwitter'].forEach(id =>
+  document.getElementById(id).addEventListener('input', updateSocialsPreview)
+);
+
+function updatePickPreview(nomEnc) {
+  if (!nomEnc) { document.getElementById('pickPreview').classList.remove('visible'); return; }
+  const mp3 = sonsMp3.find(m => m.nom === decodeURIComponent(nomEnc));
+  if (!mp3) return;
+  document.getElementById('pickPreview').classList.add('visible');
+  document.getElementById('pickPrevTitle').textContent = mp3.titre;
+  document.getElementById('pickPrevImg').src = `/api/fichiers/${encodeURIComponent(mp3.nom)}/cover`;
+}
+
+// ── PHOTOS ─────────────────────────────────────────────────────────────────
+
+function previewAvatar(input) {
+  avatarFile = input.files[0]; if (!avatarFile) return;
+  const r = new FileReader(); r.onload = e => {
+    // Formulaire
+    document.getElementById('fAvaImg').src = e.target.result;
+    document.getElementById('fAvaImg').style.display = 'block';
+    document.getElementById('fAvaEmoji').style.display = 'none';
+    // Aperçu
+    document.getElementById('prevAvaImg').src = e.target.result;
+    document.getElementById('prevAvaImg').style.display = 'block';
+    document.getElementById('prevAvaEmoji').style.display = 'none';
+  }; r.readAsDataURL(avatarFile);
+}
+
+function previewBanniere(input) {
+  banniereFile = input.files[0]; if (!banniereFile) return;
+  const r = new FileReader(); r.onload = e => {
+    // Formulaire
+    document.getElementById('fBanImg').src = e.target.result;
+    document.getElementById('fBanImg').style.display = 'block';
+    document.getElementById('fBanEmoji').style.display = 'none';
+    document.getElementById('fBanLabel').style.display = 'none';
+    // Aperçu bannière
+    document.getElementById('prevBanniereImg').src = e.target.result;
+    document.getElementById('prevBanniereImg').style.display = 'block';
+  }; r.readAsDataURL(banniereFile);
+}
+
+// ── CHARGEMENT ARTISTE ─────────────────────────────────────────────────────
+
+async function chargerArtiste(nom) {
+  if (!nom) return;
+  nomArtiste = nom;
+  document.getElementById('headerTitle').textContent = `Profil — ${nom}`;
+
+  // Charger les sons de cet artiste pour le pick
+  try {
+    const profil_data = await get(`/artistes/${encodeURIComponent(nom)}/profil`);
+    sonsMp3 = profil_data.sons || [];
+    const sel = document.getElementById('fPickSon');
+    sel.innerHTML = '<option value="">— Aucun —</option>' +
+      sonsMp3.map(s => `<option value="${encodeURIComponent(s.nom)}">${s.titre}</option>`).join('');
+  } catch(_) {}
+
+  // Charger le profil sauvegardé
+  try {
+    const info = await get(`/artistes/${encodeURIComponent(nom)}/info`);
+    remplirFormulaire(info);
+  } catch(_) {}
+}
+
+function remplirFormulaire(info) {
+  const set = (id, val) => { if (val !== undefined && val !== null) document.getElementById(id).value = val; };
+  set('fNom',       info.nom_affiche || nomArtiste);
+  set('fBio',       info.bio);
+  set('fGenre',     info.genre);
+  set('fVille',     info.ville);
+  set('fSiteWeb',   info.site_web);
+  set('fInstagram', info.instagram);
+  set('fYoutube',   info.youtube);
+  set('fTiktok',    info.tiktok);
+  set('fTwitter',   info.twitter);
+  set('fPickMsg',   info.pick_message);
+
+  // Mettre à jour l'aperçu
+  document.getElementById('prevNom').textContent = info.nom_affiche || nomArtiste;
+  updateVille(info.ville || '');
+  updateBio(info.bio || '');
+  updateSocialsPreview();
+  if (info.pick_message) updatePickMsg(info.pick_message);
+
+  // Photos sauvegardées
+  if (info.photo_avatar) {
+    document.getElementById('prevAvaImg').src = info.photo_avatar;
+    document.getElementById('prevAvaImg').style.display = 'block';
+    document.getElementById('prevAvaEmoji').style.display = 'none';
+    document.getElementById('fAvaImg').src = info.photo_avatar;
+    document.getElementById('fAvaImg').style.display = 'block';
+    document.getElementById('fAvaEmoji').style.display = 'none';
+  }
+  if (info.photo_banniere) {
+    document.getElementById('prevBanniereImg').src = info.photo_banniere;
+    document.getElementById('prevBanniereImg').style.display = 'block';
+    document.getElementById('fBanImg').src = info.photo_banniere;
+    document.getElementById('fBanImg').style.display = 'block';
+    document.getElementById('fBanEmoji').style.display = 'none';
+    document.getElementById('fBanLabel').style.display = 'none';
+  }
+
+  // Pick son
+  if (info.pick_son) {
+    const sel = document.getElementById('fPickSon');
+    const opt = [...sel.options].find(o => o.value === encodeURIComponent(info.pick_son));
+    if (opt) { opt.selected = true; updatePickPreview(opt.value); }
+  }
+
+  document.getElementById('prevGenre').textContent = info.genre || '';
+}
+
+// ── SAUVEGARDE ─────────────────────────────────────────────────────────────
+
+async function sauvegarder() {
+  if (!nomArtiste) { toast('Aucun artiste sélectionné', 'error'); return; }
+  document.getElementById('btnSave').disabled = true;
+  document.getElementById('saveProgress').classList.add('visible');
+
+  const fd = new FormData();
+  fd.append('nom_affiche', document.getElementById('fNom').value.trim());
+  fd.append('bio',         document.getElementById('fBio').value.trim());
+  fd.append('genre',       document.getElementById('fGenre').value.trim());
+  fd.append('ville',       document.getElementById('fVille').value.trim());
+  fd.append('site_web',    document.getElementById('fSiteWeb').value.trim());
+  fd.append('instagram',   document.getElementById('fInstagram').value.trim());
+  fd.append('youtube',     document.getElementById('fYoutube').value.trim());
+  fd.append('tiktok',      document.getElementById('fTiktok').value.trim());
+  fd.append('twitter',     document.getElementById('fTwitter').value.trim());
+  fd.append('pick_message',document.getElementById('fPickMsg').value.trim());
+
+  const pickVal = document.getElementById('fPickSon').value;
+  if (pickVal) fd.append('pick_son', decodeURIComponent(pickVal));
+
+  if (avatarFile)   fd.append('photo_avatar',   avatarFile);
+  if (banniereFile) fd.append('photo_banniere',  banniereFile);
+
+  try {
+    const r = await fetch(`/api/artistes/${encodeURIComponent(nomArtiste)}/info`, { method: 'POST', body: fd });
+    if (!r.ok) throw new Error((await r.json()).detail || r.statusText);
+    toast('Profil sauvegardé ✓', 'success');
+    avatarFile = null; banniereFile = null;
+  } catch(e) { toast('Erreur : ' + e.message, 'error'); }
+  finally {
+    document.getElementById('btnSave').disabled = false;
+    document.getElementById('saveProgress').classList.remove('visible');
+  }
+}
+
+// ── INIT ─────────────────────────────────────────────────────────────────────
+
+async function init() {
+  // Depuis l'URL ?artiste=...
+  const params = new URLSearchParams(location.search);
+  const artParam = params.get('artiste');
+
+  try {
+    const artistes = await get('/artistes');
+    if (!artistes.length) { toast('Aucun artiste trouvé — définissez l\'artiste dans l\'éditeur de tags', 'error'); return; }
+
+    if (artParam) {
+      // Artiste passé en URL
+      await chargerArtiste(artParam);
+    } else if (artistes.length === 1) {
+      // Un seul artiste → charger directement
+      await chargerArtiste(artistes[0].nom);
+    } else {
+      // Plusieurs → afficher le sélecteur
+      const sec = document.getElementById('artisteSelectSection');
+      sec.style.display = '';
+      const sel = document.getElementById('artisteSelect');
+      sel.innerHTML = '<option value="">— Choisir —</option>' +
+        artistes.map(a => `<option value="${encodeURIComponent(a.nom)}">${a.nom} (${a.nb_sons} sons)</option>`).join('');
+    }
+  } catch(e) { toast('Erreur API : ' + e.message, 'error'); }
+}
+
+init();
+</script>
+</body>
+</html>
