@@ -139,7 +139,7 @@ class ClientSonauto:
                 r = await self._client.get(
                     f"{SUPABASE_URL}/rest/v1/tracks",
                     params={
-                        "select":   "id,title,song_path,generation_id,lyrics_id,favorite,deleted",
+                        "select":   "id,title,song_path,generation_id,lyrics_id,favorite,deleted,track_params_id,created_at,index",
                         "favorite": "eq.true",
                         "deleted":  "eq.false",
                         "order":    "created_at.desc",
@@ -194,6 +194,35 @@ class ClientSonauto:
         except Exception:
             pass
         return None
+
+    # ── Tags / Genre depuis track_params ──────────────────────────────────────
+
+    async def obtenir_tags(self, track_params_id: str) -> list[str]:
+        """Récupère la liste de tags (genre) depuis la table track_params."""
+        if not track_params_id:
+            return []
+        try:
+            r = await self._client.get(
+                f"{SUPABASE_URL}/rest/v1/track_params",
+                params={"id": f"eq.{track_params_id}", "select": "tags"},
+                headers=self._headers_supa,
+                timeout=10,
+            )
+            if r.status_code == 200:
+                data = r.json()
+                if isinstance(data, list) and data:
+                    raw = data[0].get("tags") or []
+                    if isinstance(raw, list):
+                        return [str(t) for t in raw]
+                    if isinstance(raw, str):
+                        import ast
+                        try:
+                            return ast.literal_eval(raw)
+                        except Exception:
+                            return [raw]
+        except Exception:
+            pass
+        return []
 
     # ── Obtenir l'URL MP3 via le backend ──────────────────────────────────────
 

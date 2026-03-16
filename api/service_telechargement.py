@@ -10,7 +10,7 @@ from typing import Dict
 
 try:
     from mutagen.mp3 import MP3
-    from mutagen.id3 import ID3, TIT2, TPE1, USLT, SYLT, Encoding
+    from mutagen.id3 import ID3, TIT2, TPE1, USLT, SYLT, TCON, TDRC, Encoding
     MUTAGEN_OK = True
 except ImportError:
     MUTAGEN_OK = False
@@ -86,19 +86,26 @@ def _generer_sylt(word_aligned: list) -> list[tuple[str, int]]:
     return result
 
 
-def _integrer_id3(chemin: Path, son: Son, brut: str, lrc: str, sylt: list):
+def _integrer_id3(chemin: Path, son: Son, brut: str, lrc: str, sylt: list,
+                   genre: str = "", annee: str = ""):
     if not MUTAGEN_OK:
         return
     try:
         audio = MP3(chemin)
         tags  = audio.tags or ID3()
         tags.add(TIT2(encoding=Encoding.UTF8, text=son.titre))
-        tags.add(TPE1(encoding=Encoding.UTF8, text="Sonauto.ai"))
+        # Ne pas écraser l'artiste si déjà renseigné manuellement
+        if not tags.get("TPE1"):
+            tags.add(TPE1(encoding=Encoding.UTF8, text=""))
         if brut:
             tags.add(USLT(encoding=Encoding.UTF8, lang="fra", desc="", text=brut))
         if sylt:
             tags.add(SYLT(encoding=Encoding.UTF8, lang="fra", format=2, type=1,
                           desc="sync", text=sylt))
+        if genre:
+            tags.add(TCON(encoding=Encoding.UTF8, text=genre))
+        if annee:
+            tags.add(TDRC(encoding=Encoding.UTF8, text=annee))
         audio.tags = tags
         audio.save(v2_version=3)
     except Exception:
@@ -132,11 +139,13 @@ async def _executer_telechargement(tache_id: str, son: Son, token: str):
     tache.statut = StatutTelecharge.EN_COURS
 
     async with ClientSonauto(token) as client:
-        # 1. URL MP3 et lyrics en parallèle
-        lyrics_id = son.donnees_brutes.get("lyrics_id") or ""
-        url_mp3, donnees_lyrics = await asyncio.gather(
+        # 1. URL MP3, lyrics et tags en parallèle
+        lyrics_id       = son.donnees_brutes.get("lyrics_id") or ""
+        track_params_id = son.donnees_brutes.get("track_params_id") or ""
+        url_mp3, donnees_lyrics, tags_son = await asyncio.gather(
             client.obtenir_url_mp3(son.id),
             client.obtenir_lyrics(lyrics_id),
+            client.obtenir_tags(track_params_id),
         )
 
     if not url_mp3:
@@ -157,6 +166,12 @@ async def _executer_telechargement(tache_id: str, son: Son, token: str):
         if wals:
             sylt = _generer_sylt(wals)
 
+    # Genre depuis les tags Sonauto
+    genre = ", ".join(tags_son) if tags_son else ""
+
+    # Année depuis created_at  (ex: "2026-03-14T10:07:47.984521+00:00")
+    annee = (son.donnees_brutes.get("created_at") or "")[:4]
+
     def maj_progression(recu: int, total: int):
         tache.octets_recus = recu
         tache.octets_total = total
@@ -174,7 +189,7 @@ async def _executer_telechargement(tache_id: str, son: Son, token: str):
         tache.progression = 97.0
 
         # 3. Tags ID3 + fichier LRC
-        _integrer_id3(chemin_mp3, son, brut, lrc, sylt)
+        _integrer_id3(chemin_mp3, son, brut, lrc, sylt, genre=genre, annee=annee)
         _sauvegarder_lrc(chemin_mp3, lrc, brut)
 
         tache.statut         = StatutTelecharge.TERMINE
