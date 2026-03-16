@@ -740,9 +740,16 @@ function _parseLRC(text) {
       // Normalise : 2 chiffres → centisecondes, 3 chiffres → millisecondes
       const frac = m[3].length === 3 ? parseInt(m[3]) / 1000 : parseInt(m[3]) / 100;
       const t = parseInt(m[1]) * 60 + parseInt(m[2]) + frac;
-      // Conserve toutes les lignes, même les silences (texte vide = pause musicale)
-      const txt = m[4]; // pas de trim ni de filtre
-      lignes.push({ t, txt: txt || '' });
+      lignes.push({ t, txt: m[4] || '' });
+    } else {
+      // Ligne sans timestamp → l'attacher à l'entrée précédente (continuation)
+      const contenu = ligne; // conserver les espaces tels quels
+      if (contenu.trim() && lignes.length > 0) {
+        lignes[lignes.length - 1].txt += '\n' + contenu;
+      } else if (!contenu.trim() && lignes.length > 0 && lignes[lignes.length - 1].txt.trim()) {
+        // Ligne vide entre deux blocs → séparateur visuel
+        lignes[lignes.length - 1].txt += '\n';
+      }
     }
   }
   return lignes;
@@ -784,9 +791,15 @@ async function voirLyrics(nomEncode) {
         const div = document.createElement('div');
         div.className = 'lrc-line';
         div.dataset.idx = i;
-        // Ligne vide = silence/pause → affiche un tiret musical pour rester visible
-        div.textContent = l.txt.trim() || '♪';
-        if (!l.txt.trim()) div.style.opacity = '0.3';
+        div.style.whiteSpace = 'pre-wrap';
+        const contenu = l.txt.trim();
+        if (!contenu) {
+          // Silence/pause → indicateur discret
+          div.textContent = '♪';
+          div.style.opacity = '0.3';
+        } else {
+          div.textContent = contenu;
+        }
         div.onclick = () => {
           const audio = document.getElementById('audioPlayer');
           if (audio.src) { audio.currentTime = l.t; audio.play(); }
