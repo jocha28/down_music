@@ -34,7 +34,8 @@ class ProgressionTelechargement(BaseModel):
 
 
 class ConfigToken(BaseModel):
-    token: str
+    token:         str
+    refresh_token: str = ""  # optionnel — permet le renouvellement automatique
 
 
 class ReponseTelechargement(BaseModel):

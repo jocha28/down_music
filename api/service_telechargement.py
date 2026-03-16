@@ -16,7 +16,7 @@ except ImportError:
     MUTAGEN_OK = False
 
 from .modeles import ProgressionTelechargement, StatutTelecharge, Son
-from .client_sonauto import ClientSonauto, convertir_ogg_en_mp3
+from .client_sonauto import ClientSonauto
 
 
 DOSSIER_MUSIQUES = Path("musiques")
@@ -42,18 +42,41 @@ def _nom_propre(titre: str, ext: str = ".mp3") -> str:
     return (nom[:100] or "sans_titre") + ext
 
 
-def _extraire_lyrics(son: Son) -> tuple[str, list]:
-    brut   = son.paroles
-    timing = son.donnees_brutes.get("lyrics_alignment") or []
-    synced = [
-        (item.get("word",""), int(float(item.get("start",0)) * 1000))
-        for item in (timing if isinstance(timing, list) else [])
-        if isinstance(item, dict)
-    ]
-    return brut, synced
+def _generer_lrc(aligned: list) -> str:
+    """
+    Génère un fichier LRC depuis aligned_lyrics (liste de {start, end, text}).
+    Format : [MM:SS.xx]texte
+    """
+    lignes = []
+    for item in aligned:
+        if not isinstance(item, dict):
+            continue
+        start = float(item.get("start", 0))
+        texte = str(item.get("text", item.get("word", ""))).strip()
+        if not texte:
+            continue
+        m, s = divmod(start, 60)
+        centis = int((start % 1) * 100)
+        lignes.append(f"[{int(m):02d}:{int(s):02d}.{centis:02d}]{texte}")
+    return "\n".join(lignes)
 
 
-def _integrer_id3(chemin: Path, son: Son, brut: str, synced: list):
+def _generer_sylt(word_aligned: list) -> list[tuple[str, int]]:
+    """
+    Construit la liste SYLT (mot, timestamp_ms) pour les tags ID3.
+    """
+    result = []
+    for item in word_aligned:
+        if not isinstance(item, dict):
+            continue
+        mot = str(item.get("word", "")).strip()
+        ts_ms = int(float(item.get("start", 0)) * 1000)
+        if mot:
+            result.append((mot, ts_ms))
+    return result
+
+
+def _integrer_id3(chemin: Path, son: Son, brut: str, lrc: str, sylt: list):
     if not MUTAGEN_OK:
         return
     try:
@@ -63,28 +86,20 @@ def _integrer_id3(chemin: Path, son: Son, brut: str, synced: list):
         tags.add(TPE1(encoding=Encoding.UTF8, text="Sonauto.ai"))
         if brut:
             tags.add(USLT(encoding=Encoding.UTF8, lang="fra", desc="", text=brut))
-        if synced:
+        if sylt:
             tags.add(SYLT(encoding=Encoding.UTF8, lang="fra", format=2, type=1,
-                          desc="sync", text=synced))
+                          desc="sync", text=sylt))
         audio.tags = tags
         audio.save(v2_version=3)
     except Exception:
         pass
 
 
-def _sauvegarder_lrc(chemin_mp3: Path, brut: str, synced: list):
-    if not brut and not synced:
+def _sauvegarder_lrc(chemin_mp3: Path, lrc: str, brut: str):
+    contenu = lrc or brut
+    if not contenu:
         return
-    chemin_lrc = chemin_mp3.with_suffix(".lrc")
-    if synced:
-        lignes = []
-        for mot, ts_ms in synced:
-            s, c = divmod(ts_ms, 1000)
-            m, s = divmod(s, 60)
-            lignes.append(f"[{m:02d}:{s:02d}.{c//10:02d}]{mot}")
-        chemin_lrc.write_text("\n".join(lignes), encoding="utf-8")
-    else:
-        chemin_lrc.write_text(brut, encoding="utf-8")
+    chemin_mp3.with_suffix(".lrc").write_text(contenu, encoding="utf-8")
 
 
 # ── Cœur du téléchargement ────────────────────────────────────────────────────
@@ -102,14 +117,31 @@ async def _executer_telechargement(tache_id: str, son: Son, token: str):
 
     tache.statut = StatutTelecharge.EN_COURS
 
-    # 1. Obtenir l'URL MP3 via le backend (POST /process/download_audio)
     async with ClientSonauto(token) as client:
-        url_mp3 = await client.obtenir_url_mp3(son.id)
+        # 1. URL MP3 et lyrics en parallèle
+        lyrics_id = son.donnees_brutes.get("lyrics_id") or ""
+        url_mp3, donnees_lyrics = await asyncio.gather(
+            client.obtenir_url_mp3(son.id),
+            client.obtenir_lyrics(lyrics_id),
+        )
 
     if not url_mp3:
         tache.statut = StatutTelecharge.ERREUR
         tache.erreur = "Impossible d'obtenir l'URL MP3 depuis le backend"
         return
+
+    # Préparer les lyrics
+    brut  = ""
+    lrc   = ""
+    sylt  = []
+    if donnees_lyrics:
+        brut    = donnees_lyrics.get("lyrics") or ""
+        aligned = donnees_lyrics.get("aligned_lyrics") or []
+        wals    = donnees_lyrics.get("word_aligned_lyrics") or []
+        if aligned:
+            lrc  = _generer_lrc(aligned)
+        if wals:
+            sylt = _generer_sylt(wals)
 
     def maj_progression(recu: int, total: int):
         tache.octets_recus = recu
@@ -118,7 +150,7 @@ async def _executer_telechargement(tache_id: str, son: Son, token: str):
 
     chemin_tmp = chemin_mp3.with_suffix(".tmp")
     try:
-        # 2. Télécharger le MP3 (URL CDN publique, pas besoin d'auth)
+        # 2. Télécharger le MP3
         async with ClientSonauto(token) as client:
             with open(chemin_tmp, "wb") as f:
                 async for chunk in client.stream_audio(url_mp3, maj_progression):
@@ -127,10 +159,9 @@ async def _executer_telechargement(tache_id: str, son: Son, token: str):
         chemin_tmp.rename(chemin_mp3)
         tache.progression = 97.0
 
-        # 3. Métadonnées ID3
-        brut, synced = _extraire_lyrics(son)
-        _integrer_id3(chemin_mp3, son, brut, synced)
-        _sauvegarder_lrc(chemin_mp3, brut, synced)
+        # 3. Tags ID3 + fichier LRC
+        _integrer_id3(chemin_mp3, son, brut, lrc, sylt)
+        _sauvegarder_lrc(chemin_mp3, lrc, brut)
 
         tache.statut         = StatutTelecharge.TERMINE
         tache.progression    = 100.0

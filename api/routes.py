@@ -50,15 +50,92 @@ async def sante(request: Request):
 
 @router.post("/config/token", tags=["Configuration"], summary="Définir le token Sonauto.ai")
 async def definir_token(body: ConfigToken, request: Request):
-    token = body.token.removeprefix("Bearer ").strip()
-    request.app.state.token = token
+    token   = body.token.removeprefix("Bearer ").strip()
+    refresh = body.refresh_token.strip()
+    request.app.state.token         = token
+    request.app.state.refresh_token = refresh
 
     # Persister dans .config_sonauto.json
     config_path = Path(".config_sonauto.json")
-    config_path.write_text(json.dumps({"token": token}, indent=2))
+    config = {"token": token}
+    if refresh:
+        config["refresh_token"] = refresh
+    config_path.write_text(json.dumps(config, indent=2))
     config_path.chmod(0o600)
 
     return {"message": "Token enregistré avec succès"}
+
+
+@router.post(
+    "/config/cookie",
+    tags=["Configuration"],
+    summary="Configurer via le cookie sb-db-auth-token (base64-...)",
+)
+async def configurer_via_cookie(body: dict, request: Request):
+    """
+    Accepte la valeur brute du cookie sb-db-auth-token.0 ou .1 (format base64-...)
+    et extrait automatiquement access_token + refresh_token.
+
+    Dans la console F12 de sonauto.ai :
+    document.cookie.match(/sb-db-auth-token\\.0=([^;]+)/)?.[1]
+    """
+    import base64, re as _re, time
+    valeur = body.get("cookie", "").strip()
+    if not valeur:
+        raise HTTPException(status_code=400, detail="Champ 'cookie' requis")
+
+    # Décoder le base64
+    b64 = valeur.removeprefix("base64-")
+    while len(b64) % 4 != 0:
+        b64 = b64[:-1]
+    try:
+        decoded = base64.b64decode(b64 + "==").decode("utf-8", errors="replace")
+    except Exception:
+        raise HTTPException(status_code=400, detail="Cookie base64 invalide")
+
+    access_token   = (_re.search(r'"access_token":"([^"]+)"', decoded) or _re.Match()).group(1) if _re.search(r'"access_token":"([^"]+)"', decoded) else ""
+    refresh_token_ = (_re.search(r'"refresh_token":"([^"]+)"', decoded) or _re.Match()).group(1) if _re.search(r'"refresh_token":"([^"]+)"', decoded) else ""
+
+    if not access_token:
+        raise HTTPException(status_code=400, detail="access_token introuvable dans le cookie")
+
+    # Vérifier l'expiration
+    try:
+        parts = access_token.split(".")
+        p = parts[1].replace("-", "+").replace("_", "/")
+        p += "=" * (4 - len(p) % 4)
+        import json as _json
+        payload = _json.loads(base64.b64decode(p))
+        exp = payload.get("exp", 0)
+        if exp < time.time():
+            # Token expiré — tenter de le rafraîchir via refresh_token
+            if refresh_token_:
+                from main import _rafraichir_token
+                request.app.state.token         = access_token
+                request.app.state.refresh_token = refresh_token_
+                await _rafraichir_token(request.app)
+                access_token   = request.app.state.token
+                refresh_token_ = request.app.state.refresh_token
+            else:
+                raise HTTPException(status_code=401, detail="Token expiré et pas de refresh_token disponible")
+    except HTTPException:
+        raise
+    except Exception:
+        pass
+
+    # Sauvegarder
+    request.app.state.token         = access_token
+    request.app.state.refresh_token = refresh_token_
+    config = {"token": access_token, "refresh_token": refresh_token_}
+    config_path = Path(".config_sonauto.json")
+    config_path.write_text(json.dumps(config, indent=2))
+    config_path.chmod(0o600)
+
+    return {
+        "message":        "Token configuré avec succès",
+        "apercu":         f"{access_token[:12]}...",
+        "refresh_token":  bool(refresh_token_),
+    }
 
 
 @router.get("/config/token", tags=["Configuration"], summary="Vérifier si un token est configuré")

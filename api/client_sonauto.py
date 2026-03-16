@@ -111,15 +111,20 @@ class ClientSonauto:
     async def __aexit__(self, *_):
         await self.fermer()
 
-    # ── Sons likés via Supabase PostgREST ─────────────────────────────────────
+    # ── Helpers Supabase ──────────────────────────────────────────────────────
 
-    async def lister_sons_likes(self) -> list[Son]:
-        """Récupère les sons likés (favorite=true) depuis la table tracks."""
-        headers_supa = {
+    @property
+    def _headers_supa(self) -> dict:
+        return {
             "Authorization": f"Bearer {self._token}",
             "apikey":        SUPABASE_ANON_KEY,
             "Prefer":        "return=representation",
         }
+
+    # ── Sons likés via Supabase PostgREST ─────────────────────────────────────
+
+    async def lister_sons_likes(self) -> list[Son]:
+        """Récupère les sons likés (favorite=true) depuis la table tracks."""
         try:
             r = await self._client.get(
                 f"{SUPABASE_URL}/rest/v1/tracks",
@@ -130,7 +135,7 @@ class ClientSonauto:
                     "order":    "created_at.desc",
                     "limit":    "200",
                 },
-                headers=headers_supa,
+                headers=self._headers_supa,
                 timeout=20,
             )
             if r.status_code == 401:
@@ -144,6 +149,30 @@ class ClientSonauto:
         except Exception:
             pass
         return []
+
+    # ── Lyrics ────────────────────────────────────────────────────────────────
+
+    async def obtenir_lyrics(self, lyrics_id: str) -> dict | None:
+        """
+        Récupère les lyrics depuis la table 'lyrics' par ID.
+        Retourne un dict avec : lyrics (str), aligned_lyrics (list), word_aligned_lyrics (list)
+        """
+        if not lyrics_id:
+            return None
+        try:
+            r = await self._client.get(
+                f"{SUPABASE_URL}/rest/v1/lyrics",
+                params={"id": f"eq.{lyrics_id}", "select": "lyrics,aligned_lyrics,word_aligned_lyrics"},
+                headers=self._headers_supa,
+                timeout=15,
+            )
+            if r.status_code == 200:
+                data = r.json()
+                if isinstance(data, list) and data:
+                    return data[0]
+        except Exception:
+            pass
+        return None
 
     # ── Obtenir l'URL MP3 via le backend ──────────────────────────────────────
 
