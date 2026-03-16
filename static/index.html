@@ -732,13 +732,17 @@ function fermerPlayer() {
 
 function _parseLRC(text) {
   const lignes = [];
-  const re = /\[(\d{2}):(\d{2})[.:](\d{2})\](.*)/;
+  // Accepte 2 ou 3 chiffres pour les centisecondes/millisecondes
+  const re = /^\[(\d{2}):(\d{2})[.:](\d{2,3})\](.*)/;
   for (const ligne of text.split('\n')) {
     const m = ligne.match(re);
     if (m) {
-      const t = parseInt(m[1]) * 60 + parseInt(m[2]) + parseInt(m[3]) / 100;
-      const txt = m[4].trim();
-      if (txt) lignes.push({ t, txt });
+      // Normalise : 2 chiffres → centisecondes, 3 chiffres → millisecondes
+      const frac = m[3].length === 3 ? parseInt(m[3]) / 1000 : parseInt(m[3]) / 100;
+      const t = parseInt(m[1]) * 60 + parseInt(m[2]) + frac;
+      // Conserve toutes les lignes, même les silences (texte vide = pause musicale)
+      const txt = m[4]; // pas de trim ni de filtre
+      lignes.push({ t, txt: txt || '' });
     }
   }
   return lignes;
@@ -780,7 +784,9 @@ async function voirLyrics(nomEncode) {
         const div = document.createElement('div');
         div.className = 'lrc-line';
         div.dataset.idx = i;
-        div.textContent = l.txt;
+        // Ligne vide = silence/pause → affiche un tiret musical pour rester visible
+        div.textContent = l.txt.trim() || '♪';
+        if (!l.txt.trim()) div.style.opacity = '0.3';
         div.onclick = () => {
           const audio = document.getElementById('audioPlayer');
           if (audio.src) { audio.currentTime = l.t; audio.play(); }
