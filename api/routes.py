@@ -460,7 +460,9 @@ def _lire_tags_mp3(chemin: Path) -> dict:
             f = tags.get(k)
             return str(f.text[0]) if f and hasattr(f, "text") and f.text else ""
         result["titre"]   = _t("TIT2") or chemin.stem
-        result["artiste"] = _t("TPE1")
+        artiste_brut = _t("TPE1")
+        # "Sonauto.ai" est le tag auto du service de génération → remplacé par l'artiste réel
+        result["artiste"] = "Jocha" if artiste_brut.lower() in ("", "sonauto.ai") else artiste_brut
         result["album"]   = _t("TALB")
         result["annee"]   = _t("TDRC")
         result["genre"]   = _t("TCON")
