@@ -436,61 +436,6 @@ async def lister_artistes():
     ]
 
 
-@router.get(
-    "/artistes/{nom}/profil",
-    tags=["Artistes"],
-    summary="Récupérer tous les sons et albums d'un artiste",
-)
-async def profil_artiste(nom: str):
-    if not DOSSIER_MUSIQUES.exists():
-        raise HTTPException(status_code=404, detail="Dossier musiques introuvable")
-    from collections import defaultdict
-    sons = []
-    albums: dict = defaultdict(lambda: {"titre": "", "annee": "", "pistes": [], "cover": None})
-
-    for mp3 in sorted(DOSSIER_MUSIQUES.glob("*.mp3")):
-        info = _lire_tags_mp3(mp3)
-        artiste_fichier = info["artiste"] or "Inconnu"
-        if artiste_fichier.lower() != nom.lower():
-            continue
-        mtime = int(mp3.stat().st_mtime)
-        info["cover_url"] = f"/api/fichiers/{mp3.name}/cover?v={mtime}" if info["cover"] else None
-        info["audio_url"] = f"/api/fichiers/{mp3.name}"
-        sons.append(info)
-        if info["album"]:
-            alb = albums[info["album"]]
-            alb["titre"] = info["album"]
-            alb["annee"] = info["annee"]
-            # Lire le type de sortie depuis TXXX
-            if not alb.get("type"):
-                try:
-                    from mutagen.id3 import ID3, ID3NoHeaderError
-                    tags_mp3 = ID3(str(mp3))
-                    txxx = tags_mp3.get("TXXX:release_type")
-                    alb["type"] = str(txxx.text[0]) if txxx and txxx.text else "album"
-                except Exception:
-                    alb["type"] = "album"
-            piste_num = int(info["piste"]) if info["piste"].isdigit() else 999
-            alb["pistes"].append({"nom": mp3.name, "titre": info["titre"], "piste": piste_num})
-            if alb["cover"] is None and info["cover"]:
-                alb["cover"] = f"/api/fichiers/{mp3.name}/cover?v={int(mp3.stat().st_mtime)}"
-
-    # Trier les sons : piste si disponible, sinon titre
-    sons.sort(key=lambda s: (s["album"], int(s["piste"]) if s["piste"].isdigit() else 999, s["titre"]))
-
-    # Trier les pistes dans chaque album
-    albums_list = []
-    for alb in albums.values():
-        alb["pistes"].sort(key=lambda p: p["piste"])
-        albums_list.append(alb)
-    albums_list.sort(key=lambda a: a["annee"] or "0000", reverse=True)
-
-    return {
-        "nom":    nom,
-        "sons":   sons,
-        "albums": albums_list,
-    }
-
 
 # ── Artistes ─────────────────────────────────────────────────────────────────
 
@@ -503,6 +448,7 @@ def _lire_tags_mp3(chemin: Path) -> dict:
         "artiste": "", "album": "", "annee": "", "genre": "",
         "piste": "", "duree": 0, "cover": False,
         "lyrics": chemin.with_suffix(".lrc").exists(),
+        "type_sortie": "",
     }
     try:
         result["duree"] = int(MutagenMP3(str(chemin)).info.length)
@@ -520,8 +466,14 @@ def _lire_tags_mp3(chemin: Path) -> dict:
         result["genre"]   = _t("TCON")
         result["piste"]   = _t("TRCK").split("/")[0]
         result["cover"]   = any(k.startswith("APIC") for k in tags)
+        # Type de sortie explicite
+        txxx = tags.get("TXXX:release_type")
+        result["type_sortie"] = str(txxx.text[0]) if txxx and txxx.text else ""
     except Exception:
         pass
+    # Auto-détection single : pas d'album ET pas de numéro de piste
+    if not result["type_sortie"] and not result["album"] and not result["piste"]:
+        result["type_sortie"] = "single"
     return result
 
 
@@ -630,7 +582,8 @@ async def profil_artiste(nom: str):
         raise HTTPException(status_code=404, detail="Dossier musiques introuvable")
     from collections import defaultdict
     sons = []
-    albums: dict = defaultdict(lambda: {"titre": "", "annee": "", "pistes": [], "cover": None})
+    albums: dict = defaultdict(lambda: {"titre": "", "annee": "", "type": "album", "pistes": [], "cover": None})
+    singles_auto = []  # sons sans album détectés comme singles
     for mp3 in sorted(DOSSIER_MUSIQUES.glob("*.mp3")):
         info = _lire_tags_mp3(mp3)
         if (info["artiste"] or "Inconnu").lower() != nom.lower():
@@ -643,14 +596,29 @@ async def profil_artiste(nom: str):
             alb = albums[info["album"]]
             alb["titre"] = info["album"]
             alb["annee"] = info["annee"]
+            # Lire le type depuis le tag TXXX:release_type du premier son de l'album
+            if alb["type"] == "album" and info.get("type_sortie"):
+                alb["type"] = info["type_sortie"]
             n = int(info["piste"]) if info["piste"].isdigit() else 999
             alb["pistes"].append({"nom": mp3.name, "titre": info["titre"], "piste": n})
             if alb["cover"] is None and info["cover"]:
                 alb["cover"] = f"/api/fichiers/{mp3.name}/cover?v={int(mp3.stat().st_mtime)}"
+        elif info.get("type_sortie") == "single":
+            # Son sans album auto-détecté comme single → entrée individuelle dans la discographie
+            singles_auto.append({
+                "titre": info["titre"],
+                "annee": info["annee"],
+                "type": "single",
+                "pistes": [{"nom": mp3.name, "titre": info["titre"], "piste": 1}],
+                "cover": info["cover_url"],
+            })
     sons.sort(key=lambda s: (s["album"], int(s["piste"]) if s["piste"].isdigit() else 999, s["titre"]))
     albums_list = sorted(albums.values(), key=lambda a: a["annee"] or "0000", reverse=True)
     for a in albums_list:
         a["pistes"].sort(key=lambda p: p["piste"])
+    # Ajouter les singles auto après les albums/EP, triés par année décroissante
+    singles_auto.sort(key=lambda a: a["annee"] or "0000", reverse=True)
+    albums_list = albums_list + singles_auto
     return {"nom": nom, "sons": sons, "albums": albums_list}
 
 
