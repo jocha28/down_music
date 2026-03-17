@@ -419,7 +419,7 @@ async def lister_artistes():
     artistes: dict = defaultdict(lambda: {"sons": 0, "albums": set(), "cover_exemple": None})
     for mp3 in sorted(DOSSIER_MUSIQUES.glob("*.mp3")):
         info = _lire_tags_mp3(mp3)
-        nom = info["artiste"] or "Inconnu"
+        nom = info["artiste"] or "Jocha"
         artistes[nom]["sons"] += 1
         if info["album"]:
             artistes[nom]["albums"].add(info["album"])
@@ -564,7 +564,7 @@ async def lister_artistes():
     artistes: dict = defaultdict(lambda: {"sons": 0, "albums": set(), "cover_exemple": None})
     for mp3 in sorted(DOSSIER_MUSIQUES.glob("*.mp3")):
         info = _lire_tags_mp3(mp3)
-        nom = info["artiste"] or "Inconnu"
+        nom = info["artiste"] or "Jocha"
         artistes[nom]["sons"] += 1
         if info["album"]:
             artistes[nom]["albums"].add(info["album"])
@@ -586,7 +586,7 @@ async def profil_artiste(nom: str):
     singles_auto = []  # sons sans album détectés comme singles
     for mp3 in sorted(DOSSIER_MUSIQUES.glob("*.mp3")):
         info = _lire_tags_mp3(mp3)
-        if (info["artiste"] or "Inconnu").lower() != nom.lower():
+        if (info["artiste"] or "Jocha").lower() != nom.lower():
             continue
         mtime = int(mp3.stat().st_mtime)
         info["cover_url"]  = f"/api/fichiers/{mp3.name}/cover?v={mtime}" if info["cover"] else None
