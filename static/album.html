@@ -338,7 +338,7 @@ let dragSrcIdx = null;
 const TYPE_CONFIG = {
   album:  { label: 'Album',  nom: "Nom de l'album",  hint: '7+ pistes recommandées', max: Infinity, icon: '💿' },
   ep:     { label: 'EP',     nom: "Nom de l'EP",     hint: '3 à 6 pistes recommandées', max: Infinity, icon: '📀' },
-  single: { label: 'Single', nom: 'Titre du single', hint: '1 à 3 pistes maximum', max: 3, icon: '🎵' },
+  single: { label: 'Single', nom: 'Titre du single', hint: '1 piste maximum', max: 1, icon: '🎵' },
 };
 
 function typeCourant() {
@@ -422,6 +422,11 @@ function renderMp3(liste) {
 async function ajouterPiste(nomEncode) {
   const nom = decodeURIComponent(nomEncode);
   if (tracklist.some(t => t.nom === nom)) return;
+  // Un single = 1 piste maximum
+  if (typeCourant() === 'single' && tracklist.length >= 1) {
+    toast('Un single ne peut contenir qu\'1 seule piste', 'error');
+    return;
+  }
 
   // Récupérer les tags existants pour pré-remplir artiste/année/genre
   let tags = { artiste: '', annee: '', genre: '' };
@@ -562,14 +567,14 @@ function mettreAJourBouton() {
   const n    = tracklist.length;
   const ok   = n > 0 && nom;
 
-  // Avertissement Single > 3 pistes
+  // Blocage Single > 1 piste
   const depasse = type === 'single' && n > cfg.max;
   document.getElementById('typeHint').textContent = depasse
-    ? `⚠️ Un single dépasse rarement ${cfg.max} pistes`
+    ? `⛔ Un single ne peut contenir qu'1 seule piste`
     : cfg.hint;
-  document.getElementById('typeHint').style.color = depasse ? 'var(--yellow)' : 'var(--text3)';
+  document.getElementById('typeHint').style.color = depasse ? 'var(--red)' : 'var(--text3)';
 
-  document.getElementById('btnSave').disabled = !ok;
+  document.getElementById('btnSave').disabled = !ok || depasse;
   document.getElementById('saveInfo').textContent = !n
     ? 'Ajoutez des pistes pour pouvoir enregistrer'
     : !nom
