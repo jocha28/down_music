@@ -144,8 +144,8 @@
     border-color: rgba(124,58,237,.4);
   }
   .fichier-icone {
-    width: 32px;
-    height: 32px;
+    width: 36px;
+    height: 36px;
     background: var(--bg3);
     border-radius: 6px;
     display: flex;
@@ -155,6 +155,13 @@
     font-size: .7rem;
     color: var(--accent2);
     font-weight: 700;
+    overflow: hidden;
+  }
+  .fichier-icone img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 6px;
   }
   .fichier-item.actif .fichier-icone { background: rgba(124,58,237,.3); }
   .fichier-nom {
@@ -339,6 +346,8 @@
   }
   .btn-secondary { background: var(--bg3); color: var(--text2); border: 1px solid var(--border); }
   .btn-secondary:hover:not(:disabled) { background: var(--border); color: var(--text); }
+  .btn-danger { background: rgba(239,68,68,.12); color: var(--red); border: 1px solid rgba(239,68,68,.35); }
+  .btn-danger:hover:not(:disabled) { background: rgba(239,68,68,.25); border-color: var(--red); }
 
   /* ── TOASTS ── */
   #toasts {
@@ -595,6 +604,15 @@
       <hr class="separateur">
 
       <div class="barre-actions">
+        <button type="button" class="btn btn-danger" id="btnSupprimer" onclick="supprimerFichier()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="3 6 5 6 21 6"/>
+            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+            <path d="M10 11v6M14 11v6"/>
+            <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+          </svg>
+          Supprimer
+        </button>
         <button type="button" class="btn btn-secondary" id="btnRecharger">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="1 4 1 10 7 10"/>
@@ -698,14 +716,18 @@ function afficherListe(fichiers) {
     listeFichiersEl.innerHTML = '<div class="liste-vide">Aucun fichier MP3 trouvé.</div>';
     return;
   }
-  listeFichiersEl.innerHTML = fichiers.map(f => `
-    <div class="fichier-item${fichierActif === f.nom ? ' actif' : ''}"
-         data-nom="${f.nom}"
-         title="${f.nom}">
-      <div class="fichier-icone">MP3</div>
-      <div class="fichier-nom">${f.nom.replace(/\.mp3$/i, '')}</div>
-    </div>
-  `).join('');
+  listeFichiersEl.innerHTML = fichiers.map(f => {
+    const icone = f.cover
+      ? `<img src="/api/fichiers/${encodeURIComponent(f.nom)}/cover?v=${f.mtime}" alt="" loading="lazy">`
+      : 'MP3';
+    return `
+      <div class="fichier-item${fichierActif === f.nom ? ' actif' : ''}"
+           data-nom="${f.nom}"
+           title="${f.nom}">
+        <div class="fichier-icone">${icone}</div>
+        <div class="fichier-nom">${f.nom.replace(/\.mp3$/i, '')}</div>
+      </div>`;
+  }).join('');
   listeFichiersEl.querySelectorAll('.fichier-item').forEach(el => {
     el.addEventListener('click', () => selectionnerFichier(el.dataset.nom));
   });
@@ -930,6 +952,41 @@ function toggleLyricsEditor() {
   lyricsEditorOuvert = !lyricsEditorOuvert;
   document.getElementById('lyricsBody').classList.toggle('ouvert', lyricsEditorOuvert);
   document.getElementById('lyricsToggleLabel').textContent = lyricsEditorOuvert ? 'Masquer ▴' : 'Afficher ▾';
+}
+
+/* ── Supprimer un fichier ── */
+async function supprimerFichier() {
+  if (!fichierActif) return;
+  if (!confirm(`Supprimer définitivement "${fichierActif}" ?\nCette action est irréversible.`)) return;
+
+  const btn = document.getElementById('btnSupprimer');
+  btn.disabled = true;
+  btn.textContent = 'Suppression…';
+
+  try {
+    const rep = await fetch(`/api/fichiers/${encodeURIComponent(fichierActif)}`, { method: 'DELETE' });
+    if (!rep.ok) {
+      const err = await rep.json().catch(() => ({ detail: 'Erreur inconnue' }));
+      throw new Error(err.detail || `HTTP ${rep.status}`);
+    }
+    afficherToast(`"${fichierActif.replace(/\.mp3$/i,'')}" supprimé.`, 'succes');
+    // Retirer de la liste locale et effacer l'éditeur
+    tousLesFichiers = tousLesFichiers.filter(f => f.nom !== fichierActif);
+    fichierActif = null;
+    tagsOriginaux = null;
+    if (epAudio) { epAudio.pause(); epAudio.src = ''; }
+    editeurFormEl.classList.remove('visible');
+    editeurPlaceholder.style.display = '';
+    afficherListe(tousLesFichiers.filter(f => {
+      const q = rechercheInput.value.trim().toLowerCase();
+      return q ? f.nom.toLowerCase().includes(q) : true;
+    }));
+  } catch (e) {
+    afficherToast('Erreur : ' + e.message, 'erreur');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg> Supprimer`;
+  }
 }
 
 /* ── Init ── */

@@ -639,12 +639,14 @@ async def lister_fichiers():
     for f in sorted(DOSSIER_MUSIQUES.glob("*.mp3"), key=lambda x: x.stat().st_mtime, reverse=True):
         st = f.stat()
         dt = datetime.datetime.fromtimestamp(st.st_mtime)
+        info = _lire_tags_mp3(f)
         fichiers.append({
             "nom":    f.name,
             "taille": st.st_size,
             "url":    f"/fichiers/{f.name}",
             "lyrics": f.with_suffix(".lrc").exists(),
-            "date_telechargement": dt.strftime("%Y-%m-%d"),   # "2026-03-17"
+            "cover":  info["cover"],
+            "date_telechargement": dt.strftime("%Y-%m-%d"),
             "mtime": int(st.st_mtime),
         })
     return fichiers
@@ -952,3 +954,22 @@ async def ecrire_tags(
 
     tags.save(str(chemin))
     return {"message": "Tags enregistrés avec succès"}
+
+
+@router.delete(
+    "/fichiers/{nom_fichier}",
+    tags=["Fichiers"],
+    summary="Supprimer un fichier MP3 (et son .lrc éventuel)",
+)
+async def supprimer_fichier(nom_fichier: str):
+    chemin = DOSSIER_MUSIQUES / nom_fichier
+    if not chemin.exists() or not chemin.is_file():
+        raise HTTPException(status_code=404, detail="Fichier non trouvé")
+    if chemin.suffix.lower() != ".mp3":
+        raise HTTPException(status_code=400, detail="Seuls les fichiers .mp3 peuvent être supprimés")
+    chemin.unlink()
+    # Supprimer le fichier de lyrics associé s'il existe
+    lrc = chemin.with_suffix(".lrc")
+    if lrc.exists():
+        lrc.unlink()
+    return {"message": f"{nom_fichier} supprimé"}
