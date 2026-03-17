@@ -582,7 +582,8 @@ function renderSons(liste) {
     const pct = tache ? tache.progression : 0;
 
     const nomMp3 = encodeURIComponent(s.titre + '.mp3');
-    const artUrl = dl ? `/api/fichiers/${nomMp3}/cover` : '';
+    const mtime = (window._mtimeMap && window._mtimeMap[decodeURIComponent(nomMp3)]) || 0;
+    const artUrl = dl ? `/api/fichiers/${nomMp3}/cover?v=${mtime}` : '';
 
     return `<div class="song-card ${dl ? 'downloaded' : ''}" data-id="${s.id}">
       <div class="song-art">
@@ -726,6 +727,9 @@ async function chargerFichiers() {
     const fichiers = await api('GET', '/fichiers');
     _cacheFichiers = fichiers;
     fichiersTelecharges = new Set(fichiers.map(f => f.nom.replace('.mp3','')));
+    // Stocker le mtime pour le cache-busting des covers
+    window._mtimeMap = {};
+    for (const f of fichiers) window._mtimeMap[f.nom] = f.mtime || 0;
     if (vueFichiers === 'date') renderFichiersParDate(fichiers);
     else                        renderFichiers(fichiers);
 
