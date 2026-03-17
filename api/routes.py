@@ -662,17 +662,22 @@ async def profil_artiste(nom: str):
     summary="Lister les fichiers téléchargés",
 )
 async def lister_fichiers():
+    import datetime
     if not DOSSIER_MUSIQUES.exists():
         return []
-    return [
-        {
+    fichiers = []
+    for f in sorted(DOSSIER_MUSIQUES.glob("*.mp3"), key=lambda x: x.stat().st_mtime, reverse=True):
+        st = f.stat()
+        dt = datetime.datetime.fromtimestamp(st.st_mtime)
+        fichiers.append({
             "nom":    f.name,
-            "taille": f.stat().st_size,
+            "taille": st.st_size,
             "url":    f"/fichiers/{f.name}",
             "lyrics": f.with_suffix(".lrc").exists(),
-        }
-        for f in sorted(DOSSIER_MUSIQUES.glob("*.mp3"))
-    ]
+            "date_telechargement": dt.strftime("%Y-%m-%d"),   # "2026-03-17"
+            "mtime": int(st.st_mtime),
+        })
+    return fichiers
 
 
 @router.get(
