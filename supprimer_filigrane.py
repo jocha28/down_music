@@ -61,7 +61,11 @@ def _supprimer_filigrane(img_rgb: np.ndarray, coin: str = 'bd') -> np.ndarray:
         y0, y1, x0, x1 = _zone_coin(h, w, c, marge)
         zone = img_rgb[y0:y1, x0:x1]
         gris_zone = cv2.cvtColor(zone, cv2.COLOR_RGB2GRAY)
-        _, masque_zone = cv2.threshold(gris_zone, 220, 255, cv2.THRESH_BINARY)
+        # Seuil adaptatif : fond moyen + 3 écarts-types (min 60)
+        fond_moy = float(gris_zone.mean())
+        fond_std = float(gris_zone.std())
+        seuil = max(int(fond_moy + 3 * fond_std), 60)
+        _, masque_zone = cv2.threshold(gris_zone, seuil, 255, cv2.THRESH_BINARY)
         if masque_zone.sum() > 0:
             masque[y0:y1, x0:x1] = masque_zone
             trouve = True
