@@ -244,24 +244,34 @@
   .player-lyrics-btn { background: none; border: none; color: var(--text2); cursor: pointer; padding: 4px; display: flex; align-items: center; justify-content: center; transition: color .15s; }
   .player-lyrics-btn:hover, .player-lyrics-btn.on { color: var(--green); }
 
-  /* ── LYRICS FULLSCREEN ── */
+  /* ── LYRICS SPOTIFY STYLE ── */
   .lyrics-fs {
-    position: fixed; inset: 0; z-index: 500; display: none;
-    align-items: center; justify-content: center;
-    background: #1a0040;
-    transition: background .8s;
+    position: fixed; inset: 0 0 90px 0; z-index: 450;
+    display: none; background: #121212;
   }
   .lyrics-fs.on { display: flex; }
-  .lyrics-fs-bg { position: absolute; inset: 0; background-size: cover; background-position: center; filter: blur(80px) brightness(.3) saturate(2); transform: scale(1.1); }
-  .lyrics-fs-gradient { position: absolute; inset: 0; background: rgba(0,0,0,.4); }
-  .lyrics-content { position: relative; max-width: 720px; width: 100%; padding: 80px 32px 160px; overflow-y: auto; max-height: 100vh; scrollbar-width: none; }
-  .lyrics-content::-webkit-scrollbar { display: none; }
-  .lrc-line { font-size: clamp(1.4rem, 3vw, 2.4rem); font-weight: 700; line-height: 1.4; padding: 8px 0; color: rgba(255,255,255,.35); cursor: pointer; transition: color .3s, transform .3s; }
-  .lrc-line.active { color: #fff; transform: scale(1.02); }
-  .lrc-line.passe { color: rgba(255,255,255,.5); }
-  .lyrics-close { position: fixed; top: 24px; right: 24px; background: rgba(0,0,0,.5); border: none; color: #fff; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 10; transition: background .15s; }
+  .lyrics-layout { display: flex; width: 100%; height: 100%; }
+  .lyrics-zone { flex: 1; overflow-y: auto; padding: 80px 80px 40px; scrollbar-width: none; display: flex; align-items: flex-start; }
+  .lyrics-zone::-webkit-scrollbar { display: none; }
+  .lyrics-content { max-width: 640px; width: 100%; }
+  .lrc-line { font-size: clamp(1.6rem, 2.8vw, 2.6rem); font-weight: 700; line-height: 1.45; padding: 6px 0; cursor: pointer; color: rgba(255,255,255,.25); transition: color .25s, transform .25s; }
+  .lrc-line:hover { color: rgba(255,255,255,.5); }
+  .lrc-line.active { color: #fff; transform: scale(1.01); }
+  .lrc-line.passe  { color: rgba(255,255,255,.45); }
+  .lyrics-np { width: 320px; flex-shrink: 0; border-left: 1px solid #2a2a2a; padding: 32px 24px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #333 transparent; display: flex; flex-direction: column; gap: 24px; }
+  .lyrics-np-artist { font-size: .78rem; font-weight: 700; color: var(--text2); text-transform: uppercase; letter-spacing: .1em; }
+  .lyrics-np-cover { width: 100%; aspect-ratio: 1; border-radius: 8px; overflow: hidden; background: #282828; }
+  .lyrics-np-cover img { width: 100%; height: 100%; object-fit: cover; }
+  .lyrics-np-title { font-size: 1rem; font-weight: 700; }
+  .lyrics-np-sub   { font-size: .82rem; color: var(--text2); margin-top: 2px; }
+  .lyrics-np-about { background: #1a1a1a; border-radius: 8px; padding: 16px; }
+  .lyrics-np-about-title { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--text2); margin-bottom: 14px; }
+  .lyrics-np-avatar { width: 56px; height: 56px; border-radius: 50%; overflow: hidden; background: #282828; margin-bottom: 12px; }
+  .lyrics-np-avatar img { width: 100%; height: 100%; object-fit: cover; }
+  .lyrics-np-name { font-weight: 700; font-size: .9rem; margin-bottom: 8px; }
+  .lyrics-np-bio { font-size: .78rem; color: var(--text2); line-height: 1.6; display: -webkit-box; -webkit-line-clamp: 5; line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; }
+  .lyrics-close { position: absolute; top: 16px; left: 24px; background: rgba(0,0,0,.5); border: none; color: #fff; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 10; transition: background .15s; }
   .lyrics-close:hover { background: rgba(255,255,255,.15); }
-  .lyrics-no-lrc { color: rgba(255,255,255,.5); font-size: 1.1rem; text-align: center; padding: 60px 20px; }
 
   /* ── SÉLECTEUR ── */
   .picker { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 90vh; gap: 24px; padding: 40px; }
@@ -628,13 +638,29 @@
 </div></div>
 
 <!-- LYRICS FULLSCREEN -->
-<div class="lyrics-fs" id="lyricsFs">
-  <div class="lyrics-fs-bg" id="lyricsBg"></div>
-  <div class="lyrics-fs-gradient"></div>
-  <div class="lyrics-content" id="lyricsContent"></div>
+<div class="lyrics-fs" id="lyricsFs" style="position:fixed">
   <button class="lyrics-close" onclick="toggleLyrics()">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg>
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>
   </button>
+  <div class="lyrics-layout">
+    <div class="lyrics-zone">
+      <div class="lyrics-content" id="lyricsContent"></div>
+    </div>
+    <div class="lyrics-np" id="lyricsNP">
+      <div class="lyrics-np-artist" id="lyricsNpArtist"></div>
+      <div class="lyrics-np-cover"  id="lyricsNpCover"></div>
+      <div>
+        <div class="lyrics-np-title" id="lyricsNpTitle"></div>
+        <div class="lyrics-np-sub"   id="lyricsNpSub"></div>
+      </div>
+      <div class="lyrics-np-about">
+        <div class="lyrics-np-about-title">À propos de l'artiste</div>
+        <div class="lyrics-np-avatar" id="lyricsNpAvatar"></div>
+        <div class="lyrics-np-name"   id="lyricsNpName"></div>
+        <div class="lyrics-np-bio"    id="lyricsNpBio"></div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <div id="toasts"></div>
@@ -733,7 +759,7 @@ function render() {
     const img = document.getElementById('heroImg');
     img.src = banniereUrl;
     img.style.display = 'block';
-    document.getElementById('lyricsBg').style.backgroundImage = `url('${banniereUrl}')`;
+    
   }
 
   // Nom affiché (depuis le profil si défini)
@@ -953,12 +979,10 @@ function play(i) {
   document.getElementById('playerBar').classList.add('on');
   audio.play();
   _setPPIcon(false);
-  // Lyrics bg
-  if (s.cover_url) document.getElementById('lyricsBg').style.backgroundImage = `url('${s.cover_url}')`;
   document.querySelectorAll('.song-row').forEach(r => r.classList.remove('playing'));
   const row = document.querySelector(`.song-row[data-i="${i}"]`);
   if (row) row.classList.add('playing');
-  if (lyricsOpen) chargerLyrics(s.nom);
+  if (lyricsOpen) { chargerLyrics(s.nom); _updateLyricsNP(s); }
   updateNowPlaying(s);
   _updateNpTab();
 }
@@ -1114,11 +1138,30 @@ function syncLyrics() {
 
 function toggleLyrics() {
   lyricsOpen = !lyricsOpen;
-  const fs = document.getElementById('lyricsFs');
-  const btn = document.getElementById('lyricsToggleBtn');
-  fs.classList.toggle('on', lyricsOpen);
-  btn.classList.toggle('on', lyricsOpen);
-  if (lyricsOpen && playIdx >= 0) chargerLyrics(sons[playIdx].nom);
+  document.getElementById('lyricsFs').classList.toggle('on', lyricsOpen);
+  document.getElementById('lyricsToggleBtn').classList.toggle('on', lyricsOpen);
+  if (lyricsOpen && playIdx >= 0) {
+    const s = sons[playIdx];
+    chargerLyrics(s.nom);
+    _updateLyricsNP(s);
+  }
+}
+
+function _updateLyricsNP(s) {
+  document.getElementById('lyricsNpArtist').textContent = data.nom || '';
+  document.getElementById('lyricsNpTitle').textContent  = s.titre || s.nom;
+  document.getElementById('lyricsNpSub').textContent    = data.nom || '';
+  const cover = document.getElementById('lyricsNpCover');
+  cover.innerHTML = s.cover_url
+    ? `<img src="${s.cover_url}" onerror="this.parentElement.innerHTML='💿'" alt="">`
+    : '💿';
+  document.getElementById('lyricsNpName').textContent = data.nom || '';
+  const avatarEl = document.getElementById('lyricsNpAvatar');
+  if (data.photo_avatar)
+    avatarEl.innerHTML = `<img src="${data.photo_avatar}" alt="" style="width:100%;height:100%;object-fit:cover">`;
+  const bioKey = 'bio_' + data.nom;
+  const bio = localStorage.getItem(bioKey) || data.bio || '';
+  document.getElementById('lyricsNpBio').textContent = bio || 'Artiste indépendant.';
 }
 
 // ── HERO / ABOUT PHOTO ───────────────────────────────────────────────────────
@@ -1128,7 +1171,7 @@ function changerHero(input) {
   const r = new FileReader(); r.onload = e => {
     const img = document.getElementById('heroImg');
     img.src = e.target.result; img.style.display = 'block';
-    document.getElementById('lyricsBg').style.backgroundImage = `url('${e.target.result}')`;
+    
   }; r.readAsDataURL(f);
 }
 

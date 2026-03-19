@@ -36,16 +36,16 @@
     padding: 80px 24px 24px;
     background: linear-gradient(var(--hero-color) 0%, rgba(18,18,18,0) 100%);
     display: flex; align-items: flex-end; gap: 24px; min-height: 280px;
-    position: relative;
+    position: relative; overflow: hidden;
   }
   .hero-cover {
     width: 192px; height: 192px; flex-shrink: 0; border-radius: 4px;
     overflow: hidden; background: var(--bg3);
     display: flex; align-items: center; justify-content: center; font-size: 4rem;
-    box-shadow: 0 16px 48px rgba(0,0,0,.6);
+    box-shadow: 0 16px 48px rgba(0,0,0,.6); position: relative; z-index: 1;
   }
   .hero-cover img { width: 100%; height: 100%; object-fit: cover; }
-  .hero-meta { min-width: 0; }
+  .hero-meta { min-width: 0; position: relative; z-index: 1; }
   .hero-type { font-size: .8rem; font-weight: 700; margin-bottom: 10px; }
   .hero-title { font-size: clamp(2rem, 5vw, 4rem); font-weight: 900; letter-spacing: -.02em; line-height: 1.05; margin-bottom: 14px; }
   .hero-info { display: flex; align-items: center; gap: 8px; font-size: .875rem; flex-wrap: wrap; }
@@ -71,28 +71,46 @@
 
   /* ── TRACKLIST ── */
   .page { padding: 0 24px 120px; }
+  /* colonnes : # | titre+artiste | plays | like+durée */
+  .tracks-header,
+  .track-row {
+    display: grid;
+    grid-template-columns: 32px 1fr minmax(80px,120px) minmax(60px,90px);
+    align-items: center; gap: 8px;
+    padding: 0 16px;
+  }
   .tracks-header {
-    display: grid; grid-template-columns: 28px 1fr auto;
-    padding: 0 16px 8px; border-bottom: 1px solid var(--border);
-    font-size: .75rem; color: var(--text3); font-weight: 500; letter-spacing: .08em; text-transform: uppercase;
+    padding-bottom: 8px; border-bottom: 1px solid var(--border);
+    font-size: .72rem; color: var(--text3); font-weight: 600; letter-spacing: .1em; text-transform: uppercase;
     margin-bottom: 4px;
   }
   .track-row {
-    display: grid; grid-template-columns: 28px 1fr auto;
-    align-items: center; gap: 14px;
-    padding: 8px 16px; border-radius: 4px; cursor: default; transition: background .1s;
+    padding-top: 8px; padding-bottom: 8px;
+    border-radius: 4px; cursor: default; transition: background .1s;
   }
   .track-row:hover { background: var(--bg3); }
   .track-row.playing .track-name { color: var(--green); }
-  .track-row.playing .track-num { color: var(--green); }
-  .track-num { text-align: right; font-size: .875rem; color: var(--text2); font-variant-numeric: tabular-nums; }
-  .track-row:hover .track-num { display: none; }
-  .track-row:hover .track-play { display: flex !important; }
+  .track-row.playing .track-num  { color: var(--green); }
+
+  /* col 1 : numéro / play au survol */
+  .track-num  { text-align: right; font-size: .875rem; color: var(--text2); font-variant-numeric: tabular-nums; }
   .track-play { display: none; align-items: center; justify-content: flex-end; cursor: pointer; color: #fff; }
-  .track-main { min-width: 0; }
-  .track-name { font-size: .9375rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .track-row:hover .track-num  { display: none; }
+  .track-row:hover .track-play { display: flex !important; }
+
+  /* col 2 : titre + artiste */
+  .track-name   { font-size: .9375rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .track-artist { font-size: .78rem; color: var(--text2); margin-top: 2px; }
-  .track-right { display: flex; align-items: center; gap: 16px; }
+
+  /* col 3 : plays */
+  .track-plays {
+    font-size: .82rem; color: var(--text2);
+    font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap;
+  }
+  .track-plays.zero { color: var(--text3); }
+
+  /* col 4 : ♡ + durée */
+  .track-right  { display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
   .like-btn { background: none; border: none; cursor: pointer; color: var(--text3); opacity: 0; transition: opacity .15s, color .15s; padding: 3px; }
   .track-row:hover .like-btn { opacity: 1; }
   .like-btn.on { color: var(--green); opacity: 1; }
@@ -165,6 +183,70 @@
   .spin { animation: sp .8s linear infinite; display: inline-block; }
   @keyframes sp { to { transform: rotate(360deg); } }
 
+  /* ── COVER BG (hero uniquement) ── */
+  .cover-bg {
+    position: absolute; inset: 0; z-index: 0;
+    background-size: cover; background-position: center;
+    filter: blur(60px) brightness(.3) saturate(1.5);
+    transform: scale(1.08);
+    opacity: 0; transition: opacity 1s ease;
+  }
+  .cover-bg.visible { opacity: 1; }
+
+  /* ── LYRICS SPOTIFY STYLE ── */
+  .player-lyrics-btn { background: none; border: none; color: var(--text2); cursor: pointer; padding: 4px; display: flex; align-items: center; justify-content: center; transition: color .15s; }
+  .player-lyrics-btn:hover, .player-lyrics-btn.on { color: var(--green); }
+
+  .lyrics-fs {
+    position: fixed; inset: 0 0 90px 0; z-index: 450;
+    display: none; background: #121212;
+  }
+  .lyrics-fs.on { display: flex; }
+  .lyrics-layout { display: flex; width: 100%; height: 100%; }
+
+  /* zone paroles */
+  .lyrics-zone {
+    flex: 1; overflow-y: auto; padding: 80px 80px 40px;
+    scrollbar-width: none; display: flex; align-items: flex-start;
+  }
+  .lyrics-zone::-webkit-scrollbar { display: none; }
+  .lyrics-content { max-width: 640px; width: 100%; }
+  .lrc-line {
+    font-size: clamp(1.6rem, 2.8vw, 2.6rem); font-weight: 700;
+    line-height: 1.45; padding: 6px 0; cursor: pointer;
+    color: rgba(255,255,255,.25);
+    transition: color .25s, transform .25s;
+  }
+  .lrc-line:hover { color: rgba(255,255,255,.5); }
+  .lrc-line.active { color: #fff; transform: scale(1.01); }
+  .lrc-line.passe  { color: rgba(255,255,255,.45); }
+
+  /* panneau NP à droite */
+  .lyrics-np {
+    width: 320px; flex-shrink: 0; border-left: 1px solid #2a2a2a;
+    padding: 32px 24px; overflow-y: auto; scrollbar-width: thin;
+    scrollbar-color: #333 transparent; display: flex; flex-direction: column; gap: 24px;
+  }
+  .lyrics-np-artist { font-size: .78rem; font-weight: 700; color: var(--text2); text-transform: uppercase; letter-spacing: .1em; }
+  .lyrics-np-cover { width: 100%; aspect-ratio: 1; border-radius: 8px; overflow: hidden; background: #282828; }
+  .lyrics-np-cover img { width: 100%; height: 100%; object-fit: cover; }
+  .lyrics-np-title { font-size: 1rem; font-weight: 700; }
+  .lyrics-np-sub   { font-size: .82rem; color: var(--text2); margin-top: 2px; }
+  .lyrics-np-about { background: #1a1a1a; border-radius: 8px; padding: 16px; }
+  .lyrics-np-about-title { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--text2); margin-bottom: 14px; }
+  .lyrics-np-avatar { width: 56px; height: 56px; border-radius: 50%; overflow: hidden; background: #282828; margin-bottom: 12px; }
+  .lyrics-np-avatar img { width: 100%; height: 100%; object-fit: cover; }
+  .lyrics-np-name { font-weight: 700; font-size: .9rem; margin-bottom: 8px; }
+  .lyrics-np-bio { font-size: .78rem; color: var(--text2); line-height: 1.6; display: -webkit-box; -webkit-line-clamp: 5; line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; }
+
+  .lyrics-close {
+    position: absolute; top: 16px; left: 24px; background: rgba(0,0,0,.5);
+    border: none; color: #fff; width: 36px; height: 36px; border-radius: 50%;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    z-index: 10; transition: background .15s;
+  }
+  .lyrics-close:hover { background: rgba(255,255,255,.15); }
+
   /* ── SHELL MODE ── */
   body.in-shell .player { display: none !important; }
   body.in-shell { padding-bottom: 0 !important; }
@@ -191,6 +273,7 @@
 
 <!-- HERO -->
 <div class="hero" id="hero">
+  <div class="cover-bg" id="coverBg"></div>
   <div class="hero-cover" id="heroCover">💿</div>
   <div class="hero-meta">
     <div class="hero-type" id="heroType">Album</div>
@@ -221,9 +304,12 @@
 <!-- TRACKLIST -->
 <div class="page">
   <div class="tracks-header">
-    <span>#</span>
+    <span style="text-align:right">#</span>
     <span>Titre</span>
-    <span>⏱</span>
+    <span style="text-align:right">Plays</span>
+    <span style="text-align:right">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+    </span>
   </div>
   <div id="trackList"></div>
 
@@ -240,6 +326,32 @@
       <a href="#" class="see-all" id="seeAllLink">Voir la discographie</a>
     </div>
     <div class="more-scroll" id="moreScroll"></div>
+  </div>
+</div>
+
+<!-- LYRICS SPOTIFY STYLE -->
+<div class="lyrics-fs" id="lyricsFs" style="position:fixed">
+  <button class="lyrics-close" onclick="toggleLyrics()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>
+  </button>
+  <div class="lyrics-layout">
+    <div class="lyrics-zone">
+      <div class="lyrics-content" id="lyricsContent"></div>
+    </div>
+    <div class="lyrics-np" id="lyricsNP">
+      <div class="lyrics-np-artist" id="lyricsNpArtist"></div>
+      <div class="lyrics-np-cover" id="lyricsNpCover"></div>
+      <div>
+        <div class="lyrics-np-title" id="lyricsNpTitle"></div>
+        <div class="lyrics-np-sub"   id="lyricsNpSub"></div>
+      </div>
+      <div class="lyrics-np-about">
+        <div class="lyrics-np-about-title">À propos de l'artiste</div>
+        <div class="lyrics-np-avatar" id="lyricsNpAvatar"></div>
+        <div class="lyrics-np-name"   id="lyricsNpName"></div>
+        <div class="lyrics-np-bio"    id="lyricsNpBio"></div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -279,6 +391,9 @@
     </div>
   </div>
   <div class="player-right">
+    <button class="player-lyrics-btn" id="lyricsToggleBtn" onclick="toggleLyrics()" title="Paroles">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+    </button>
     <button class="ctrl-btn" id="muteBtn" onclick="toggleMute()" title="Volume">
       <svg id="volIcon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
     </button>
@@ -297,6 +412,7 @@ const IN_SHELL = window.parent !== window && typeof window.parent.gJouer === 'fu
 const API = '';
 let albumData  = null;
 let artisteData = null;
+let profilInfo  = {};
 let pistes     = [];
 let playIdx    = -1;
 let nomArtiste = '';
@@ -395,14 +511,18 @@ async function render() {
   const coverEl = document.getElementById('heroCover');
   if (albumData.cover) {
     coverEl.innerHTML = `<img src="${albumData.cover}" alt="" onerror="this.parentElement.innerHTML='💿'">`;
-    // Couleur dominante
+    // Fond cover en transparence
+    const bg = document.getElementById('coverBg');
+    bg.style.backgroundImage = `url('${albumData.cover}')`;
+    bg.classList.add('visible');
+    // Couleur dominante pour le hero
     const col = await extraireCouleur(albumData.cover);
     document.getElementById('hero').style.background = `linear-gradient(${col} 0%, rgba(18,18,18,0) 100%)`;
     document.documentElement.style.setProperty('--hero-color', col);
   }
 
   // Avatar artiste
-  const profilInfo = await get(`/artistes/${encodeURIComponent(nomArtiste)}/info`).catch(() => ({}));
+  profilInfo = await get(`/artistes/${encodeURIComponent(nomArtiste)}/info`).catch(() => ({}));
   const avaEl = document.getElementById('heroAva');
   if (profilInfo.photo_avatar) {
     avaEl.innerHTML = `<img src="${profilInfo.photo_avatar}" alt="">`;
@@ -428,8 +548,22 @@ async function render() {
   }
 }
 
+// ── COMPTEUR DE LECTURES ─────────────────────────────────────────────────────
+function _getPlays(nom) {
+  return parseInt(localStorage.getItem('plays_' + nom) || '0', 10);
+}
+function _incPlays(nom) {
+  localStorage.setItem('plays_' + nom, _getPlays(nom) + 1);
+}
+function _fmtPlays(n) {
+  if (n === 0) return '—';
+  return n.toLocaleString('fr-FR');
+}
+
 function renderTracks() {
-  document.getElementById('trackList').innerHTML = pistes.map((s, i) => `
+  document.getElementById('trackList').innerHTML = pistes.map((s, i) => {
+    const plays = _getPlays(s.nom);
+    return `
     <div class="track-row${playIdx === i ? ' playing' : ''}" data-i="${i}">
       <div class="track-num">${i+1}</div>
       <div class="track-play" onclick="play(${i})">
@@ -439,13 +573,15 @@ function renderTracks() {
         <div class="track-name">${s.titre || s.nom}</div>
         <div class="track-artist">${s.artiste || nomArtiste}</div>
       </div>
+      <div class="track-plays${plays === 0 ? ' zero' : ''}">${_fmtPlays(plays)}</div>
       <div class="track-right">
         <button class="like-btn" onclick="this.classList.toggle('on')">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
         </button>
         <span class="duration">${dur(s.duree)}</span>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 function renderMore() {
@@ -485,6 +621,7 @@ const audio = document.getElementById('audio');
 
 function play(i) {
   const s = pistes[i]; if (!s) return;
+  _incPlays(s.nom);
   if (IN_SHELL) {
     playIdx = i;
     window.parent.gJouer(pistes, i, { nom: nomArtiste });
@@ -499,6 +636,7 @@ function play(i) {
   th.innerHTML = s.cover_url
     ? `<img src="${s.cover_url}" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML='🎵'" alt="">`
     : '🎵';
+  if (lyricsOpen) { chargerLyrics(s.nom); _updateLyricsNP(s); }
   document.getElementById('playerBar').classList.add('on');
   audio.play();
   _setPPIcon(false);
@@ -567,6 +705,7 @@ audio.addEventListener('timeupdate', () => {
   bar.style.setProperty('--pct', pct + '%');
   document.getElementById('timeCurrent').textContent = _fmt(audio.currentTime);
   document.getElementById('timeTotal').textContent   = _fmt(audio.duration);
+  if (lyricsOpen) syncLyrics();
 });
 audio.addEventListener('play',  () => _setPPIcon(false));
 audio.addEventListener('pause', () => _setPPIcon(true));
@@ -574,6 +713,93 @@ audio.addEventListener('ended', () => {
   if (repeatMode === 'one') { audio.currentTime = 0; audio.play(); return; }
   playNext();
 });
+
+// ── PAROLES ──────────────────────────────────────────────────────────────────
+let lyricsOpen = false, lrcLines = [], lastLrcIdx = -1;
+
+function _parseLRC(text) {
+  const lines = []; const re = /^\[(\d{2}):(\d{2})[.:](\d{2,3})\](.*)/;
+  for (const l of text.split('\n')) {
+    const m = l.match(re);
+    if (m) {
+      const frac = m[3].length === 3 ? +m[3]/1000 : +m[3]/100;
+      lines.push({ t: +m[1]*60 + +m[2] + frac, txt: m[4] || '' });
+    } else if (l.trim() && lines.length) lines[lines.length-1].txt += '\n' + l;
+  }
+  return lines;
+}
+
+async function chargerLyrics(nomFichier) {
+  const content = document.getElementById('lyricsContent');
+  content.innerHTML = '<div style="color:rgba(255,255,255,.5);padding:60px 0;text-align:center">Chargement…</div>';
+  lrcLines = []; lastLrcIdx = -1;
+  try {
+    const r = await fetch(`/api/fichiers/${encodeURIComponent(nomFichier)}/lyrics`);
+    if (!r.ok) throw new Error();
+    const { lyrics } = await r.json();
+    lrcLines = _parseLRC(lyrics);
+    if (lrcLines.length) {
+      content.innerHTML = '';
+      lrcLines.forEach((l, i) => {
+        const div = document.createElement('div');
+        div.className = 'lrc-line'; div.dataset.i = i;
+        div.style.whiteSpace = 'pre-wrap';
+        div.textContent = l.txt.trim() || '♪';
+        if (!l.txt.trim()) div.style.opacity = '.3';
+        div.onclick = () => { audio.currentTime = l.t; audio.play(); };
+        content.appendChild(div);
+      });
+      syncLyrics();
+    } else {
+      content.innerHTML = `<div style="color:rgba(255,255,255,.5);font-size:1.1rem;text-align:center;padding:60px 20px">${lyrics.slice(0,2000)}</div>`;
+    }
+  } catch { content.innerHTML = '<div style="color:rgba(255,255,255,.5);font-size:1.1rem;text-align:center;padding:60px 20px">Paroles non disponibles</div>'; }
+}
+
+function syncLyrics() {
+  const t = audio.currentTime;
+  let idx = -1;
+  for (let i = 0; i < lrcLines.length; i++) { if (lrcLines[i].t <= t) idx = i; else break; }
+  if (idx === lastLrcIdx) return;
+  lastLrcIdx = idx;
+  document.querySelectorAll('.lrc-line').forEach((el, i) => {
+    el.classList.toggle('active', i === idx);
+    el.classList.toggle('passe', i < idx);
+  });
+  if (idx >= 0) {
+    const el = document.querySelector(`.lrc-line[data-i="${idx}"]`);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+}
+
+function toggleLyrics() {
+  lyricsOpen = !lyricsOpen;
+  document.getElementById('lyricsFs').classList.toggle('on', lyricsOpen);
+  document.getElementById('lyricsToggleBtn').classList.toggle('on', lyricsOpen);
+  if (lyricsOpen && playIdx >= 0) {
+    const s = pistes[playIdx];
+    chargerLyrics(s.nom);
+    _updateLyricsNP(s);
+  }
+}
+
+function _updateLyricsNP(s) {
+  document.getElementById('lyricsNpArtist').textContent = s.artiste || nomArtiste;
+  document.getElementById('lyricsNpTitle').textContent  = s.titre || s.nom;
+  document.getElementById('lyricsNpSub').textContent    = s.artiste || nomArtiste;
+  const cover = document.getElementById('lyricsNpCover');
+  cover.innerHTML = s.cover_url
+    ? `<img src="${s.cover_url}" onerror="this.parentElement.innerHTML='💿'" alt="">`
+    : '💿';
+  // About artist
+  document.getElementById('lyricsNpName').textContent = profilInfo.nom_affiche || nomArtiste;
+  const avatarEl = document.getElementById('lyricsNpAvatar');
+  if (profilInfo.photo_avatar) {
+    avatarEl.innerHTML = `<img src="${profilInfo.photo_avatar}" alt="" style="width:100%;height:100%;object-fit:cover">`;
+  }
+  const bio = profilInfo.bio || '';
+  document.getElementById('lyricsNpBio').textContent = bio || 'Artiste indépendant.';
+}
 
 function jouerAlbumExterne(titreEnc) {
   const alb = artisteData.albums.find(a => a.titre === decodeURIComponent(titreEnc));
