@@ -274,6 +274,58 @@
   .pick-name { font-weight: 700; font-size: .9rem; text-align: center; }
   .pick-count { font-size: .75rem; color: var(--text2); }
 
+  /* ── NOW PLAYING PANEL ── */
+  .np-panel {
+    position: fixed; top: 0; right: 0; bottom: 90px;
+    width: 340px; background: #121212;
+    border-left: 1px solid #282828;
+    z-index: 350; display: flex; flex-direction: column;
+    transform: translateX(100%); transition: transform .3s cubic-bezier(.4,0,.2,1);
+    overflow-y: auto; scrollbar-width: thin; scrollbar-color: #333 transparent;
+  }
+  .np-panel.on { transform: translateX(0); }
+  .np-panel::-webkit-scrollbar { width: 4px; }
+  .np-panel::-webkit-scrollbar-thumb { background: #444; border-radius: 2px; }
+
+  /* Cover pleine largeur */
+  .np-cover {
+    width: 100%; aspect-ratio: 1; flex-shrink: 0;
+    background: #282828; position: relative; overflow: hidden;
+  }
+  .np-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .np-cover-placeholder { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 5rem; }
+
+  /* Infos titre */
+  .np-info { padding: 16px 18px 12px; border-bottom: 1px solid #282828; }
+  .np-title { font-size: 1rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .np-artist { font-size: .8rem; color: var(--text2); margin-top: 3px; }
+  .np-like { float: right; background: none; border: none; color: var(--text3); cursor: pointer; padding: 4px; margin-top: -4px; transition: color .15s; }
+  .np-like:hover, .np-like.on { color: var(--green); }
+
+  /* À propos artiste */
+  .np-section { padding: 18px; border-bottom: 1px solid #1a1a1a; }
+  .np-section-title { font-size: .7rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--text2); margin-bottom: 14px; }
+  .np-about { display: flex; flex-direction: column; gap: 12px; }
+  .np-about-top { display: flex; align-items: center; gap: 12px; }
+  .np-ava { width: 52px; height: 52px; border-radius: 50%; overflow: hidden; flex-shrink: 0; background: linear-gradient(135deg,var(--accent),#1a1a2e); display: flex; align-items: center; justify-content: center; font-size: 1.4rem; }
+  .np-ava img { width: 100%; height: 100%; object-fit: cover; }
+  .np-about-name { font-size: .95rem; font-weight: 700; }
+  .np-about-listeners { font-size: .75rem; color: var(--text2); margin-top: 2px; }
+  .np-about-bio { font-size: .78rem; color: var(--text2); line-height: 1.6; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+
+  /* Suivant dans la file */
+  .np-queue { display: flex; align-items: center; gap: 12px; cursor: pointer; border-radius: 6px; padding: 6px; transition: background .15s; }
+  .np-queue:hover { background: #1a1a1a; }
+  .np-queue-cover { width: 44px; height: 44px; border-radius: 3px; overflow: hidden; background: #282828; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 1rem; }
+  .np-queue-cover img { width: 100%; height: 100%; object-fit: cover; }
+  .np-queue-title { font-size: .85rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .np-queue-artist { font-size: .75rem; color: var(--text2); margin-top: 2px; }
+
+  /* Bouton toggle dans le player */
+  .np-toggle-btn { background: none; border: none; color: var(--text2); cursor: pointer; padding: 4px; display: flex; align-items: center; justify-content: center; transition: color .15s; border-radius: 3px; }
+  .np-toggle-btn:hover { color: #fff; }
+  .np-toggle-btn.on { color: var(--green); }
+
   /* ── TOAST ── */
   #toasts { position: fixed; bottom: 90px; right: 24px; display: flex; flex-direction: column; gap: 8px; z-index: 600; }
   .toast { background: #333; border-radius: 4px; padding: 12px 16px; font-size: .85rem; max-width: 300px; box-shadow: 0 8px 24px rgba(0,0,0,.5); animation: tin .25s; }
@@ -486,9 +538,54 @@
     </button>
     <input type="range" class="vol-bar" id="volBar" min="0" max="100" value="100" step="1"
            oninput="setVolume(this.value)" style="--pct:100%">
+    <!-- Now Playing View toggle -->
+    <button class="np-toggle-btn" id="npToggleBtn" onclick="toggleNowPlaying()" title="Vue en lecture">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+    </button>
     <button class="ctrl-btn" onclick="stopPlayer()" title="Fermer">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
     </button>
+  </div>
+</div>
+
+<!-- NOW PLAYING PANEL -->
+<div class="np-panel" id="npPanel">
+  <!-- Cover -->
+  <div class="np-cover" id="npCover">
+    <div class="np-cover-placeholder" id="npCoverPlaceholder">🎵</div>
+  </div>
+  <!-- Titre + like -->
+  <div class="np-info">
+    <button class="np-like" id="npLike" onclick="this.classList.toggle('on')">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+    </button>
+    <div class="np-title" id="npTitle">–</div>
+    <div class="np-artist" id="npArtist">–</div>
+  </div>
+  <!-- À propos de l'artiste -->
+  <div class="np-section" id="npAboutSection">
+    <div class="np-section-title">À propos de l'artiste</div>
+    <div class="np-about">
+      <div class="np-about-top">
+        <div class="np-ava" id="npAva"><span id="npAvaEmoji">🎤</span></div>
+        <div>
+          <div class="np-about-name" id="npAboutName">–</div>
+          <div class="np-about-listeners" id="npAboutListeners">–</div>
+        </div>
+      </div>
+      <div class="np-about-bio" id="npAboutBio"></div>
+    </div>
+  </div>
+  <!-- Suivant dans la file -->
+  <div class="np-section" id="npQueueSection" style="display:none">
+    <div class="np-section-title">Suivant dans la file</div>
+    <div class="np-queue" id="npQueueItem" onclick="_playQueueNext()">
+      <div class="np-queue-cover" id="npQueueCover">🎵</div>
+      <div style="min-width:0">
+        <div class="np-queue-title" id="npQueueTitle">–</div>
+        <div class="np-queue-artist" id="npQueueArtist">–</div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -814,6 +911,7 @@ function play(i) {
   const row = document.querySelector(`.song-row[data-i="${i}"]`);
   if (row) row.classList.add('playing');
   if (lyricsOpen) chargerLyrics(s.nom);
+  updateNowPlaying(s);
 }
 
 function playAlbum(i) {
@@ -845,6 +943,7 @@ function stopPlayer() {
   audio.pause();
   document.getElementById('playerBar').classList.remove('on');
   if (lyricsOpen) toggleLyrics();
+  if (npOpen) toggleNowPlaying();
 }
 function toggleShuffle() {
   shuffleOn = !shuffleOn;
@@ -1008,6 +1107,84 @@ function toggleBio() {
     para.style.color = val ? 'var(--text2)' : 'var(--text3)';
     btn.textContent = 'Modifier';
   }
+}
+
+// ── NOW PLAYING PANEL ────────────────────────────────────────────────────────
+
+let npOpen = false;
+
+function toggleNowPlaying() {
+  npOpen = !npOpen;
+  document.getElementById('npPanel').classList.toggle('on', npOpen);
+  document.getElementById('npToggleBtn').classList.toggle('on', npOpen);
+}
+
+function updateNowPlaying(s) {
+  if (!s) return;
+
+  // Cover
+  const cover = document.getElementById('npCover');
+  const ph    = document.getElementById('npCoverPlaceholder');
+  if (s.cover_url) {
+    // Supprimer l'ancienne img si présente
+    const old = cover.querySelector('img');
+    if (old) old.remove();
+    const img = document.createElement('img');
+    img.src = s.cover_url;
+    img.alt = '';
+    img.onerror = () => { img.remove(); ph.style.display = ''; };
+    ph.style.display = 'none';
+    cover.appendChild(img);
+  } else {
+    const old = cover.querySelector('img');
+    if (old) old.remove();
+    ph.style.display = '';
+    ph.textContent = '🎵';
+  }
+
+  // Titre / artiste
+  document.getElementById('npTitle').textContent  = s.titre || '–';
+  document.getElementById('npArtist').textContent = s.artiste || (data && data.nom) || '–';
+
+  // À propos artiste
+  const nomArtiste = profilInfo.nom_affiche || (data && data.nom) || '–';
+  document.getElementById('npAboutName').textContent = nomArtiste;
+  document.getElementById('npAboutListeners').textContent = sons.length + ' sons';
+  document.getElementById('npAboutBio').textContent = profilInfo.bio || '';
+
+  // Avatar artiste
+  const ava = document.getElementById('npAva');
+  const emoji = document.getElementById('npAvaEmoji');
+  if (profilInfo && profilInfo.photo_avatar) {
+    let img = ava.querySelector('img');
+    if (!img) { img = document.createElement('img'); img.alt = ''; ava.appendChild(img); if (emoji) emoji.style.display = 'none'; }
+    img.src = profilInfo.photo_avatar;
+  } else {
+    const img = ava.querySelector('img');
+    if (img) img.remove();
+    if (emoji) emoji.style.display = '';
+  }
+
+  // Suivant dans la file
+  const next = sons[playIdx + 1];
+  const qSec = document.getElementById('npQueueSection');
+  if (next) {
+    qSec.style.display = '';
+    document.getElementById('npQueueTitle').textContent  = next.titre;
+    document.getElementById('npQueueArtist').textContent = next.artiste || (data && data.nom) || '–';
+    const qc = document.getElementById('npQueueCover');
+    if (next.cover_url) {
+      qc.innerHTML = `<img src="${next.cover_url}" style="width:100%;height:100%;object-fit:cover" alt="" onerror="this.parentElement.innerHTML='🎵'">`;
+    } else {
+      qc.textContent = '🎵';
+    }
+  } else {
+    qSec.style.display = 'none';
+  }
+}
+
+function _playQueueNext() {
+  if (playIdx + 1 < sons.length) play(playIdx + 1);
 }
 
 // ── INIT ─────────────────────────────────────────────────────────────────────
