@@ -972,4 +972,18 @@ async def supprimer_fichier(nom_fichier: str):
     lrc = chemin.with_suffix(".lrc")
     if lrc.exists():
         lrc.unlink()
+    # Mémoriser la suppression pour empêcher le re-téléchargement automatique
+    _noter_suppression(nom_fichier)
     return {"message": f"{nom_fichier} supprimé"}
+
+
+def _noter_suppression(nom_fichier: str) -> None:
+    import json as _json
+    fichier = Path("data/suppressions.json")
+    fichier.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        suppressions: set = set(_json.loads(fichier.read_text(encoding="utf-8"))) if fichier.exists() else set()
+    except Exception:
+        suppressions = set()
+    suppressions.add(nom_fichier)
+    fichier.write_text(_json.dumps(sorted(suppressions), ensure_ascii=False, indent=2), encoding="utf-8")

@@ -19,7 +19,25 @@ from .modeles import ProgressionTelechargement, StatutTelecharge, Son
 from .client_sonauto import ClientSonauto
 
 
-DOSSIER_MUSIQUES = Path("musiques")
+DOSSIER_MUSIQUES  = Path("musiques")
+FICHIER_SUPPRESSIONS = Path("data/suppressions.json")
+
+
+# ── Liste noire des sons supprimés ───────────────────────────────────────────
+
+def _charger_suppressions() -> set[str]:
+    """Retourne l'ensemble des noms de fichiers supprimés manuellement."""
+    import json
+    if not FICHIER_SUPPRESSIONS.exists():
+        return set()
+    try:
+        return set(json.loads(FICHIER_SUPPRESSIONS.read_text(encoding="utf-8")))
+    except Exception:
+        return set()
+
+def _est_supprime(nom_fichier: str) -> bool:
+    """Vérifie si un nom de fichier MP3 a été supprimé manuellement."""
+    return nom_fichier in _charger_suppressions()
 
 
 # ── Dictionnaire global des tâches ────────────────────────────────────────────
@@ -128,6 +146,14 @@ async def _executer_telechargement(tache_id: str, son: Son, token: str):
     # Détecter le nom de fichier disponible (gère les doublons de titres)
     nom_base = _nom_propre(son.titre)
     chemin_base = DOSSIER_MUSIQUES / nom_base
+
+    # Vérifier si ce son a été supprimé manuellement → ne pas re-télécharger
+    if _est_supprime(nom_base):
+        tache.statut      = StatutTelecharge.DEJA_PRESENT
+        tache.progression = 100.0
+        tache.erreur      = "supprimé"
+        return
+
     if chemin_base.exists():
         tache.statut         = StatutTelecharge.DEJA_PRESENT
         tache.progression    = 100.0
