@@ -367,6 +367,13 @@
     .hero-name { font-size: 2.8rem; }
     .player-info { display: none; }
   }
+
+  /* ── SHELL MODE ── */
+  body.in-shell .player,
+  body.in-shell .np-panel,
+  body.in-shell .np-tab { display: none !important; }
+  body.in-shell #profile { padding-bottom: 0 !important; margin-right: 0 !important; }
+  body.in-shell { padding-bottom: 0; }
 </style>
 </head>
 <body>
@@ -633,6 +640,7 @@
 <div id="toasts"></div>
 
 <script>
+const IN_SHELL = window.parent !== window && typeof window.parent.gJouer === 'function';
 const API = '';
 let data      = null;   // { nom, sons, albums }
 let profilInfo = {};    // données sauvegardées côté serveur
@@ -927,6 +935,15 @@ const audio = document.getElementById('audio');
 
 function play(i) {
   const s = sons[i]; if (!s) return;
+  if (IN_SHELL) {
+    playIdx = i;
+    window.parent.gJouer(sons, i, profilInfo);
+    // Highlight la ligne jouée
+    document.querySelectorAll('.song-row').forEach(r => r.classList.remove('playing'));
+    const row = document.querySelector(`.song-row[data-i="${i}"]`);
+    if (row) row.classList.add('playing');
+    return;
+  }
   playIdx = i;
   audio.src = s.audio_url;
   document.getElementById('playerTitle').textContent  = s.titre;
@@ -1232,6 +1249,7 @@ function _playQueueNext() {
 // ── INIT ─────────────────────────────────────────────────────────────────────
 
 const params = new URLSearchParams(location.search);
+if (IN_SHELL) document.body.classList.add('in-shell');
 const a = params.get('artiste');
 if (a) load(a); else showPicker();
 </script>

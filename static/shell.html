@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sonauto Player</title>
+<style>
+  :root {
+    --bg: #121212; --bg2: #181818; --bg3: #282828;
+    --border: #2a2a2a; --green: #1db954;
+    --text: #fff; --text2: #b3b3b3; --text3: #6a6a6a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: var(--bg); color: var(--text); font-family: 'Circular', 'Inter', system-ui, sans-serif; overflow: hidden; }
+
+  /* ── LAYOUT ── */
+  .shell-layout { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+  .shell-content { flex: 1; display: flex; flex-direction: row; overflow: hidden; min-height: 0; }
+  #pageFrame { flex: 1; border: none; height: 100%; display: block; min-width: 0; }
+
+  /* ── PLAYER BAR ── */
+  .player {
+    height: 90px; flex-shrink: 0;
+    background: #181818; border-top: 1px solid #282828;
+    display: grid; grid-template-columns: 1fr 2fr 1fr;
+    align-items: center; padding: 0 16px;
+  }
+  .player-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .player-thumb { width: 56px; height: 56px; border-radius: 4px; flex-shrink: 0; overflow: hidden; background: var(--bg3); display: flex; align-items: center; justify-content: center; font-size: 1.1rem; }
+  .player-thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .player-info { min-width: 0; flex: 1; }
+  .player-title  { font-size: .875rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .player-artist { font-size: .75rem; color: var(--text2); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .player-center { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .player-controls { display: flex; align-items: center; gap: 20px; }
+  .ctrl-btn { background: none; border: none; color: var(--text2); cursor: pointer; padding: 4px; display: flex; align-items: center; justify-content: center; transition: color .15s, transform .1s; }
+  .ctrl-btn:hover { color: #fff; transform: scale(1.08); }
+  .ctrl-btn.active { color: var(--green); }
+  .ctrl-btn.active:hover { color: #1ed760; }
+  .pp-btn { width: 32px; height: 32px; border-radius: 50%; background: #fff; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: transform .1s; flex-shrink: 0; }
+  .pp-btn:hover { transform: scale(1.07); }
+
+  .player-progress { display: flex; align-items: center; gap: 8px; width: 100%; max-width: 560px; }
+  .p-time { font-size: .68rem; color: var(--text2); font-variant-numeric: tabular-nums; min-width: 34px; text-align: center; }
+  .progress-bar {
+    flex: 1; -webkit-appearance: none; appearance: none;
+    height: 4px; border-radius: 2px; cursor: pointer; outline: none;
+    background: linear-gradient(to right, #fff 0%, #fff var(--pct,0%), #4d4d4d var(--pct,0%), #4d4d4d 100%);
+    transition: height .1s;
+  }
+  .progress-bar:hover { height: 6px; }
+  .progress-bar::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%; background: #fff; opacity: 0; transition: opacity .15s; }
+  .progress-bar:hover::-webkit-slider-thumb { opacity: 1; }
+  .progress-bar::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: #fff; border: none; opacity: 0; }
+  .progress-bar:hover::-moz-range-thumb { opacity: 1; }
+
+  .player-right { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
+  .vol-bar {
+    width: 80px; -webkit-appearance: none; appearance: none;
+    height: 4px; border-radius: 2px; cursor: pointer; outline: none;
+    background: linear-gradient(to right, #fff 0%, #fff var(--pct,100%), #4d4d4d var(--pct,100%), #4d4d4d 100%);
+  }
+  .vol-bar::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%; background: #fff; }
+  .vol-bar::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: #fff; border: none; }
+
+  .player-lyrics-btn { background: none; border: none; color: var(--text2); cursor: pointer; padding: 4px; display: flex; align-items: center; justify-content: center; transition: color .15s; }
+  .player-lyrics-btn:hover, .player-lyrics-btn.on { color: var(--green); }
+
+  .np-toggle-btn { background: none; border: none; color: var(--text2); cursor: pointer; padding: 4px; display: flex; align-items: center; justify-content: center; transition: color .15s; border-radius: 3px; }
+  .np-toggle-btn:hover { color: #fff; }
+  .np-toggle-btn.on { color: var(--green); }
+
+  /* ── NOW PLAYING PANEL (in-flow) ── */
+  .np-panel {
+    width: 0; overflow: hidden; transition: width .3s cubic-bezier(.4,0,.2,1);
+    background: #121212; border-left: 1px solid transparent;
+    display: flex; flex-direction: column;
+  }
+  .np-panel.on {
+    width: 340px;
+    border-left-color: #282828;
+    overflow-y: auto;
+  }
+  .np-panel::-webkit-scrollbar { width: 4px; }
+  .np-panel::-webkit-scrollbar-thumb { background: #444; border-radius: 2px; }
+  .np-inner { width: 340px; flex-shrink: 0; display: flex; flex-direction: column; }
+
+  .np-cover { width: 100%; aspect-ratio: 1; background: #282828; position: relative; overflow: hidden; flex-shrink: 0; }
+  .np-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+  .np-info { padding: 16px 18px 12px; border-bottom: 1px solid #282828; }
+  .np-title { font-size: 1rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .np-artist { font-size: .8rem; color: var(--text2); margin-top: 3px; }
+
+  .np-section { padding: 18px; border-bottom: 1px solid #1a1a1a; }
+  .np-section-title { font-size: .7rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--text2); margin-bottom: 14px; }
+
+  .np-about { display: flex; flex-direction: column; gap: 12px; }
+  .np-about-top { display: flex; align-items: center; gap: 12px; }
+  .np-ava { width: 52px; height: 52px; border-radius: 50%; overflow: hidden; background: linear-gradient(135deg,#7c3aed,#1a1a2e); display: flex; align-items: center; justify-content: center; font-size: 1.4rem; flex-shrink: 0; }
+  .np-ava img { width: 100%; height: 100%; object-fit: cover; }
+  .np-about-name { font-size: .95rem; font-weight: 700; }
+  .np-about-listeners { font-size: .75rem; color: var(--text2); margin-top: 2px; }
+  .np-about-bio { font-size: .78rem; color: var(--text2); line-height: 1.6; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+
+  .np-queue { display: flex; align-items: center; gap: 12px; cursor: pointer; border-radius: 6px; padding: 6px; transition: background .15s; }
+  .np-queue:hover { background: #1a1a1a; }
+  .np-queue-cover { width: 44px; height: 44px; border-radius: 3px; overflow: hidden; background: #282828; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 1rem; }
+  .np-queue-cover img { width: 100%; height: 100%; object-fit: cover; }
+  .np-queue-title { font-size: .85rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .np-queue-artist { font-size: .75rem; color: var(--text2); margin-top: 2px; }
+
+  /* ── LYRICS FULLSCREEN ── */
+  .lyrics-fs {
+    position: fixed; inset: 0; z-index: 9000; display: none;
+    align-items: center; justify-content: center;
+    background: #1a0040;
+  }
+  .lyrics-fs.on { display: flex; }
+  .lyrics-fs-bg { position: absolute; inset: 0; background-size: cover; background-position: center; filter: blur(80px) brightness(.3) saturate(2); transform: scale(1.1); }
+  .lyrics-fs-gradient { position: absolute; inset: 0; background: rgba(0,0,0,.4); }
+  .lyrics-content { position: relative; max-width: 720px; width: 100%; padding: 80px 32px 160px; overflow-y: auto; max-height: 100vh; scrollbar-width: none; }
+  .lyrics-content::-webkit-scrollbar { display: none; }
+  .lrc-line { font-size: clamp(1.4rem,3vw,2.4rem); font-weight: 700; line-height: 1.4; padding: 8px 0; color: rgba(255,255,255,.35); cursor: pointer; transition: color .3s, transform .3s; }
+  .lrc-line.active { color: #fff; transform: scale(1.02); }
+  .lrc-line.passe { color: rgba(255,255,255,.5); }
+  .lyrics-close { position: fixed; top: 24px; right: 24px; background: rgba(0,0,0,.5); border: none; color: #fff; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 10; transition: background .15s; }
+  .lyrics-close:hover { background: rgba(255,255,255,.15); }
+</style>
+</head>
+<body>
+
+<div class="shell-layout">
+  <div class="shell-content">
+    <iframe id="pageFrame" src="/static/artiste.html"></iframe>
+
+    <!-- NOW PLAYING PANEL (in-flow) -->
+    <div class="np-panel" id="npPanel">
+      <div class="np-inner">
+        <!-- Cover -->
+        <div class="np-cover" id="npCover">
+          <div id="npCoverPh" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:5rem">🎵</div>
+        </div>
+        <!-- Info -->
+        <div class="np-info">
+          <button class="np-like" id="npLike" onclick="this.classList.toggle('on')" style="float:right;background:none;border:none;color:var(--text3);cursor:pointer;padding:4px;transition:color .15s" onmouseover="this.style.color='var(--green)'" onmouseout="if(!this.classList.contains('on'))this.style.color='var(--text3)'">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+          </button>
+          <div class="np-title" id="npTitle">–</div>
+          <div class="np-artist" id="npArtist">–</div>
+        </div>
+        <!-- À propos artiste -->
+        <div class="np-section">
+          <div class="np-section-title">À propos de l'artiste</div>
+          <div class="np-about">
+            <div class="np-about-top">
+              <div class="np-ava" id="npAva"><span id="npAvaEmoji">🎤</span></div>
+              <div>
+                <div class="np-about-name" id="npAboutName">–</div>
+                <div class="np-about-listeners" id="npAboutListeners">–</div>
+              </div>
+            </div>
+            <div class="np-about-bio" id="npAboutBio"></div>
+          </div>
+        </div>
+        <!-- Suivant -->
+        <div class="np-section" id="npQueueSection" style="display:none">
+          <div class="np-section-title">Suivant dans la file</div>
+          <div class="np-queue" onclick="gPlayNext()">
+            <div class="np-queue-cover" id="npQueueCover">🎵</div>
+            <div style="min-width:0">
+              <div class="np-queue-title" id="npQueueTitle">–</div>
+              <div class="np-queue-artist" id="npQueueArtist">–</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PLAYER BAR -->
+  <audio id="gAudio"></audio>
+  <div class="player" id="gPlayerBar" style="display:none">
+    <div class="player-left">
+      <div class="player-thumb" id="gPlayerThumb">🎵</div>
+      <div class="player-info">
+        <div class="player-title" id="gPlayerTitle">–</div>
+        <div class="player-artist" id="gPlayerArtist">–</div>
+      </div>
+    </div>
+    <div class="player-center">
+      <div class="player-controls">
+        <button class="ctrl-btn" id="gShuffleBtn" onclick="gToggleShuffle()" title="Aléatoire">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>
+        </button>
+        <button class="ctrl-btn" onclick="gPlayPrev()" title="Précédent">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5" stroke="currentColor" stroke-width="2"/></svg>
+        </button>
+        <button class="pp-btn" id="gPPBtn" onclick="gTogglePlay()">
+          <svg id="gPPIcon" width="16" height="16" viewBox="0 0 24 24" fill="#000"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        </button>
+        <button class="ctrl-btn" onclick="gPlayNext()" title="Suivant">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19" stroke="currentColor" stroke-width="2"/></svg>
+        </button>
+        <button class="ctrl-btn" id="gRepeatBtn" onclick="gToggleRepeat()" title="Répéter">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+        </button>
+      </div>
+      <div class="player-progress">
+        <span class="p-time" id="gTimeCurrent">0:00</span>
+        <input type="range" class="progress-bar" id="gProgressBar" min="0" max="100" value="0" step="0.1" oninput="gSeekTo(this.value)" style="--pct:0%">
+        <span class="p-time" id="gTimeTotal">0:00</span>
+      </div>
+    </div>
+    <div class="player-right">
+      <button class="player-lyrics-btn" id="gLyricsBtn" onclick="gToggleLyrics()" title="Paroles">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      </button>
+      <button class="ctrl-btn" id="gMuteBtn" onclick="gToggleMute()" title="Volume">
+        <svg id="gVolIcon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+      </button>
+      <input type="range" class="vol-bar" id="gVolBar" min="0" max="100" value="100" step="1" oninput="gSetVolume(this.value)" style="--pct:100%">
+      <button class="np-toggle-btn" id="npToggleBtn" onclick="gToggleNP()" title="Vue en lecture">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+      </button>
+      <button class="ctrl-btn" onclick="gStop()" title="Fermer">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- LYRICS FULLSCREEN -->
+<div class="lyrics-fs" id="gLyricsFs">
+  <div class="lyrics-fs-bg" id="gLyricsBg"></div>
+  <div class="lyrics-fs-gradient"></div>
+  <div class="lyrics-content" id="gLyricsContent"></div>
+  <button class="lyrics-close" onclick="gToggleLyrics()">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg>
+  </button>
+</div>
+
+<script>
+let gSons = [];
+let gPlayIdx = -1;
+let gProfilInfo = {};
+let gShuffleOn = false;
+let gRepeatMode = 'off'; // 'off' | 'all' | 'one'
+let gMuted = false;
+let gLastVol = 100;
+let gLyricsOpen = false;
+let gLrcLines = [];
+let gLastLrcIdx = -1;
+let gNpOpen = false;
+const gAudio = document.getElementById('gAudio');
+
+function gJouer(sons, idx, profilInfo) {
+  gSons = sons || [];
+  gPlayIdx = idx;
+  gProfilInfo = profilInfo || {};
+  const s = gSons[idx];
+  if (!s) return;
+  const src = s.audio_url || `/api/fichiers/${encodeURIComponent(s.nom)}`;
+  gAudio.src = src;
+  gAudio.play();
+  _gSetPPIcon(false);
+  // Player bar
+  document.getElementById('gPlayerTitle').textContent  = s.titre || s.nom || '–';
+  document.getElementById('gPlayerArtist').textContent = s.artiste || profilInfo?.nom_affiche || profilInfo?.nom || '–';
+  const th = document.getElementById('gPlayerThumb');
+  th.innerHTML = s.cover_url
+    ? `<img src="${s.cover_url}" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML='🎵'" alt="">`
+    : '🎵';
+  document.getElementById('gPlayerBar').style.display = 'grid';
+  if (s.cover_url) document.getElementById('gLyricsBg').style.backgroundImage = `url('${s.cover_url}')`;
+  if (gLyricsOpen) _gChargerLyrics(s.nom);
+  _gUpdateNP();
+}
+
+function gPlayNext() {
+  if (!gSons.length) return;
+  if (gShuffleOn) { gJouer(gSons, Math.floor(Math.random() * gSons.length), gProfilInfo); return; }
+  if (gPlayIdx < gSons.length - 1) gJouer(gSons, gPlayIdx + 1, gProfilInfo);
+  else if (gRepeatMode === 'all') gJouer(gSons, 0, gProfilInfo);
+}
+
+function gPlayPrev() {
+  if (gAudio.currentTime > 3) { gAudio.currentTime = 0; return; }
+  if (gPlayIdx > 0) gJouer(gSons, gPlayIdx - 1, gProfilInfo);
+  else gAudio.currentTime = 0;
+}
+
+function gTogglePlay() {
+  if (gAudio.paused) { gAudio.play(); _gSetPPIcon(false); }
+  else { gAudio.pause(); _gSetPPIcon(true); }
+}
+
+function gStop() {
+  gAudio.pause();
+  document.getElementById('gPlayerBar').style.display = 'none';
+  if (gLyricsOpen) gToggleLyrics();
+  if (gNpOpen) gToggleNP();
+}
+
+function gToggleShuffle() {
+  gShuffleOn = !gShuffleOn;
+  document.getElementById('gShuffleBtn').classList.toggle('active', gShuffleOn);
+}
+
+function gToggleRepeat() {
+  gRepeatMode = { off: 'all', all: 'one', one: 'off' }[gRepeatMode];
+  document.getElementById('gRepeatBtn').classList.toggle('active', gRepeatMode !== 'off');
+}
+
+function gToggleMute() {
+  gMuted = !gMuted;
+  gAudio.muted = gMuted;
+  const icon = document.getElementById('gVolIcon');
+  icon.innerHTML = gMuted
+    ? '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="none" stroke="currentColor" stroke-width="2"/><line x1="23" y1="9" x2="17" y2="15" stroke="currentColor" stroke-width="2"/><line x1="17" y1="9" x2="23" y2="15" stroke="currentColor" stroke-width="2"/>'
+    : '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>';
+}
+
+function gSetVolume(v) {
+  gAudio.volume = v / 100;
+  gLastVol = v;
+  document.getElementById('gVolBar').style.setProperty('--pct', v + '%');
+}
+
+function gSeekTo(pct) {
+  if (gAudio.duration) gAudio.currentTime = (pct / 100) * gAudio.duration;
+}
+
+function _gSetPPIcon(paused) {
+  document.getElementById('gPPIcon').innerHTML = paused
+    ? '<polygon points="5 3 19 12 5 21 5 3"/>'
+    : '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>';
+}
+
+function _gFmt(s) {
+  if (!s && s !== 0) return '0:00';
+  return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+}
+
+gAudio.addEventListener('timeupdate', () => {
+  if (!gAudio.duration) return;
+  const pct = (gAudio.currentTime / gAudio.duration) * 100;
+  const bar = document.getElementById('gProgressBar');
+  bar.value = pct;
+  bar.style.setProperty('--pct', pct + '%');
+  document.getElementById('gTimeCurrent').textContent = _gFmt(gAudio.currentTime);
+  document.getElementById('gTimeTotal').textContent   = _gFmt(gAudio.duration);
+  if (gLyricsOpen) _gSyncLyrics();
+});
+
+gAudio.addEventListener('play',  () => _gSetPPIcon(false));
+gAudio.addEventListener('pause', () => _gSetPPIcon(true));
+gAudio.addEventListener('ended', () => {
+  if (gRepeatMode === 'one') { gAudio.currentTime = 0; gAudio.play(); return; }
+  gPlayNext();
+});
+
+// ── NOW PLAYING PANEL ────────────────────────────────────────────────────────
+
+function gToggleNP() {
+  gNpOpen = !gNpOpen;
+  document.getElementById('npPanel').classList.toggle('on', gNpOpen);
+  document.getElementById('npToggleBtn').classList.toggle('on', gNpOpen);
+  if (gNpOpen) _gUpdateNP();
+}
+
+function _gUpdateNP() {
+  if (!gNpOpen) return;
+  const s = gSons[gPlayIdx]; if (!s) return;
+
+  // Cover
+  const cover = document.getElementById('npCover');
+  const ph = document.getElementById('npCoverPh');
+  const oldImg = cover.querySelector('img');
+  if (oldImg) oldImg.remove();
+  if (s.cover_url) {
+    ph.style.display = 'none';
+    const img = document.createElement('img');
+    img.src = s.cover_url; img.alt = '';
+    img.onerror = () => { img.remove(); ph.style.display = ''; };
+    cover.appendChild(img);
+  } else {
+    ph.style.display = '';
+  }
+
+  // Info
+  document.getElementById('npTitle').textContent  = s.titre || s.nom || '–';
+  document.getElementById('npArtist').textContent = s.artiste || gProfilInfo?.nom_affiche || gProfilInfo?.nom || '–';
+
+  // Artiste
+  const nomArtiste = gProfilInfo?.nom_affiche || gProfilInfo?.nom || '–';
+  document.getElementById('npAboutName').textContent = nomArtiste;
+  document.getElementById('npAboutListeners').textContent = gSons.length + ' sons';
+  document.getElementById('npAboutBio').textContent = gProfilInfo?.bio || '';
+
+  // Avatar
+  const ava = document.getElementById('npAva');
+  const emoji = document.getElementById('npAvaEmoji');
+  const oldAvaImg = ava.querySelector('img');
+  if (gProfilInfo?.photo_avatar) {
+    if (!oldAvaImg) {
+      const img = document.createElement('img'); img.alt = '';
+      ava.appendChild(img);
+      if (emoji) emoji.style.display = 'none';
+    }
+    ava.querySelector('img').src = gProfilInfo.photo_avatar;
+  } else {
+    if (oldAvaImg) oldAvaImg.remove();
+    if (emoji) emoji.style.display = '';
+  }
+
+  // Suivant
+  const next = gSons[gPlayIdx + 1];
+  const qSec = document.getElementById('npQueueSection');
+  if (next) {
+    qSec.style.display = '';
+    document.getElementById('npQueueTitle').textContent  = next.titre || next.nom;
+    document.getElementById('npQueueArtist').textContent = next.artiste || nomArtiste;
+    const qc = document.getElementById('npQueueCover');
+    qc.innerHTML = next.cover_url
+      ? `<img src="${next.cover_url}" style="width:100%;height:100%;object-fit:cover" alt="" onerror="this.parentElement.innerHTML='🎵'">`
+      : '🎵';
+  } else {
+    qSec.style.display = 'none';
+  }
+}
+
+// ── LYRICS ──────────────────────────────────────────────────────────────────
+
+function gToggleLyrics() {
+  gLyricsOpen = !gLyricsOpen;
+  const fs  = document.getElementById('gLyricsFs');
+  const btn = document.getElementById('gLyricsBtn');
+  fs.classList.toggle('on', gLyricsOpen);
+  btn.classList.toggle('on', gLyricsOpen);
+  if (gLyricsOpen && gPlayIdx >= 0 && gSons[gPlayIdx]) _gChargerLyrics(gSons[gPlayIdx].nom);
+}
+
+function _gParseLRC(text) {
+  const lines = []; const re = /^\[(\d{2}):(\d{2})[.:](\d{2,3})\](.*)/;
+  for (const l of text.split('\n')) {
+    const m = l.match(re);
+    if (m) {
+      const frac = m[3].length === 3 ? +m[3] / 1000 : +m[3] / 100;
+      lines.push({ t: +m[1] * 60 + +m[2] + frac, txt: m[4] || '' });
+    }
+  }
+  return lines;
+}
+
+async function _gChargerLyrics(nom) {
+  const content = document.getElementById('gLyricsContent');
+  content.innerHTML = '<div style="color:rgba(255,255,255,.5);padding:60px 0;text-align:center">Chargement…</div>';
+  gLrcLines = []; gLastLrcIdx = -1;
+  try {
+    const r = await fetch(`/api/fichiers/${encodeURIComponent(nom)}/lyrics`);
+    if (!r.ok) throw new Error();
+    const { lyrics } = await r.json();
+    gLrcLines = _gParseLRC(lyrics);
+    if (gLrcLines.length) {
+      content.innerHTML = '';
+      gLrcLines.forEach((l, i) => {
+        const div = document.createElement('div');
+        div.className = 'lrc-line'; div.dataset.i = i;
+        div.style.whiteSpace = 'pre-wrap';
+        div.textContent = l.txt.trim() || '♪';
+        if (!l.txt.trim()) div.style.opacity = '.3';
+        div.onclick = () => { gAudio.currentTime = l.t; gAudio.play(); };
+        content.appendChild(div);
+      });
+      _gSyncLyrics();
+    } else {
+      content.innerHTML = `<div style="color:rgba(255,255,255,.5);font-size:1.1rem;text-align:center;padding:60px 20px">${lyrics.slice(0, 2000)}</div>`;
+    }
+  } catch {
+    content.innerHTML = '<div style="color:rgba(255,255,255,.5);font-size:1.1rem;text-align:center;padding:60px 20px">Paroles non disponibles</div>';
+  }
+}
+
+function _gSyncLyrics() {
+  const t = gAudio.currentTime;
+  let idx = -1;
+  for (let i = 0; i < gLrcLines.length; i++) { if (gLrcLines[i].t <= t) idx = i; else break; }
+  if (idx === gLastLrcIdx) return;
+  gLastLrcIdx = idx;
+  document.querySelectorAll('.lrc-line').forEach((el, i) => {
+    el.classList.toggle('active', i === idx);
+    el.classList.toggle('passe', i < idx);
+  });
+  if (idx >= 0) {
+    const el = document.querySelector(`.lrc-line[data-i="${idx}"]`);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+}
+
+// ── INIT ─────────────────────────────────────────────────────────────────────
+const _params = new URLSearchParams(location.search);
+const _artiste = _params.get('artiste');
+document.getElementById('pageFrame').src = _artiste
+  ? `/static/artiste.html?artiste=${encodeURIComponent(_artiste)}`
+  : '/static/artiste.html';
+</script>
+</body>
+</html>

@@ -164,6 +164,10 @@
 
   .spin { animation: sp .8s linear infinite; display: inline-block; }
   @keyframes sp { to { transform: rotate(360deg); } }
+
+  /* ── SHELL MODE ── */
+  body.in-shell .player { display: none !important; }
+  body.in-shell { padding-bottom: 0 !important; }
 </style>
 </head>
 <body>
@@ -289,6 +293,7 @@
 <div class="toasts" id="toasts"></div>
 
 <script>
+const IN_SHELL = window.parent !== window && typeof window.parent.gJouer === 'function';
 const API = '';
 let albumData  = null;
 let artisteData = null;
@@ -346,6 +351,7 @@ function extraireCouleur(imgUrl) {
 async function init() {
   const params = new URLSearchParams(location.search);
   nomArtiste   = params.get('artiste') || '';
+  if (IN_SHELL) document.body.classList.add('in-shell');
   const titreAlb = params.get('album') || '';
 
   if (!nomArtiste || !titreAlb) {
@@ -479,6 +485,12 @@ const audio = document.getElementById('audio');
 
 function play(i) {
   const s = pistes[i]; if (!s) return;
+  if (IN_SHELL) {
+    playIdx = i;
+    window.parent.gJouer(pistes, i, { nom: nomArtiste });
+    renderTracks();
+    return;
+  }
   playIdx = i;
   audio.src = s.audio_url || `/api/fichiers/${encodeURIComponent(s.nom)}`;
   document.getElementById('playerTitle').textContent  = s.titre || s.nom;
