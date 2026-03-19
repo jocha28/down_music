@@ -173,6 +173,40 @@
   .progress-bar { width: 100%; height: 6px; background: var(--bg3); border-radius: 3px; overflow: hidden; }
   .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); border-radius: 3px; transition: width .3s; }
   .progress-label { font-size: .75rem; color: var(--text3); text-align: center; }
+
+  /* ── MODAL ALBUMS ── */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,.7);
+    z-index: 500; align-items: center; justify-content: center; backdrop-filter: blur(4px);
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius);
+    width: 640px; max-width: 95vw; max-height: 80vh; display: flex; flex-direction: column;
+    box-shadow: 0 24px 60px rgba(0,0,0,.5);
+  }
+  .modal-header {
+    padding: 18px 20px 14px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+  }
+  .modal-title { font-weight: 700; font-size: 1rem; }
+  .modal-body { flex: 1; overflow-y: auto; padding: 14px; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+  .modal-search { width: 100%; margin-bottom: 12px; background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); padding: 8px 12px; font-size: .85rem; outline: none; }
+  .modal-search:focus { border-color: var(--accent2); }
+  .album-card {
+    display: flex; align-items: center; gap: 14px; padding: 12px 14px;
+    border-radius: var(--radius-sm); cursor: pointer; transition: background .15s;
+    border: 1px solid transparent;
+  }
+  .album-card:hover { background: var(--bg3); border-color: var(--border); }
+  .album-card-cover {
+    width: 52px; height: 52px; border-radius: 6px; background: var(--bg3); flex-shrink: 0;
+    overflow: hidden; display: flex; align-items: center; justify-content: center; font-size: 1.5rem;
+  }
+  .album-card-cover img { width: 100%; height: 100%; object-fit: cover; }
+  .album-card-info { flex: 1; min-width: 0; }
+  .album-card-nom { font-weight: 600; font-size: .9rem; }
+  .album-card-meta { font-size: .75rem; color: var(--text3); margin-top: 3px; }
 </style>
 </head>
 <body>
@@ -184,12 +218,34 @@
     </svg>
     Sonauto Downloader
   </div>
-  <span class="header-center">Gestionnaire d'albums</span>
-  <a href="/static/editeur.html" class="btn btn-secondary btn-sm">
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
-    Retour
-  </a>
+  <span class="header-center" id="headerTitle">Gestionnaire d'albums</span>
+  <div style="display:flex;gap:8px;align-items:center;">
+    <button class="btn btn-secondary btn-sm" onclick="ouvrirModalAlbums()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+      Modifier un album
+    </button>
+    <a href="/static/editeur.html" class="btn btn-secondary btn-sm">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+      Retour
+    </a>
+  </div>
 </header>
+
+<!-- ── MODAL : choisir un album à modifier ── -->
+<div class="modal-overlay" id="modalAlbums" onclick="if(event.target===this)fermerModalAlbums()">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Modifier un album existant</span>
+      <button class="btn btn-icon" onclick="fermerModalAlbums()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <input class="modal-search" type="text" id="modalSearch" placeholder="Rechercher un album…" oninput="filtrerAlbums()">
+      <div id="albumCards"></div>
+    </div>
+  </div>
+</div>
 
 <div class="workspace">
 
@@ -645,9 +701,125 @@ async function enregistrerAlbum() {
   document.getElementById('btnSave').disabled = false;
 }
 
+// ── MODAL ALBUMS ───────────────────────────────────────────────────────────
+
+let tousLesAlbums = [];
+
+async function ouvrirModalAlbums() {
+  document.getElementById('modalAlbums').classList.add('open');
+  document.getElementById('albumCards').innerHTML =
+    '<div style="text-align:center;padding:24px;color:var(--text3)"><span class="spin">⟳</span> Chargement…</div>';
+  document.getElementById('modalSearch').value = '';
+  try {
+    tousLesAlbums = await api('GET', '/albums');
+    renderAlbumCards(tousLesAlbums);
+  } catch(e) {
+    document.getElementById('albumCards').innerHTML =
+      `<div style="text-align:center;padding:24px;color:var(--red);font-size:.85rem;">${e.message}</div>`;
+  }
+}
+
+function fermerModalAlbums() {
+  document.getElementById('modalAlbums').classList.remove('open');
+}
+
+function filtrerAlbums() {
+  const q = document.getElementById('modalSearch').value.toLowerCase();
+  renderAlbumCards(tousLesAlbums.filter(a =>
+    a.nom.toLowerCase().includes(q) || (a.artiste||'').toLowerCase().includes(q)
+  ));
+}
+
+function renderAlbumCards(liste) {
+  const el = document.getElementById('albumCards');
+  if (!liste.length) {
+    el.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text3);font-size:.85rem;">Aucun album trouvé</div>';
+    return;
+  }
+  el.innerHTML = liste.map(a => {
+    const coverHtml = a.cover
+      ? `<img src="${a.cover}" onerror="this.parentElement.textContent='💿'" loading="lazy" alt="">`
+      : '💿';
+    const typeLabel = { album: 'Album', ep: 'EP', single: 'Single' }[a.type] || 'Album';
+    const meta = [typeLabel, a.nb_pistes + ' piste' + (a.nb_pistes > 1 ? 's' : ''), a.annee, a.artiste]
+      .filter(Boolean).join(' · ');
+    return `<div class="album-card" data-nom="${a.nom.replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
+      <div class="album-card-cover">${coverHtml}</div>
+      <div class="album-card-info">
+        <div class="album-card-nom">${a.nom}</div>
+        <div class="album-card-meta">${meta}</div>
+      </div>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text3);flex-shrink:0"><polyline points="9 18 15 12 9 6"/></svg>
+    </div>`;
+  }).join('');
+  el.querySelectorAll('.album-card').forEach(card =>
+    card.addEventListener('click', () => chargerAlbum(card.dataset.nom))
+  );
+}
+
+async function chargerAlbum(nomAlbum) {
+  fermerModalAlbums();
+  toast(`Chargement de « ${nomAlbum } »…`, 'info', 2000);
+  try {
+    const pistes = await api('GET', `/albums/${encodeURIComponent(nomAlbum)}`);
+    if (!pistes.length) { toast('Album vide', 'error'); return; }
+
+    // Vider tracklist actuelle
+    tracklist = [];
+
+    // Remplir les infos album depuis la première piste
+    const p0 = pistes[0];
+    document.getElementById('albumNom').value    = nomAlbum;
+    document.getElementById('albumArtiste').value = p0.artiste || 'Jocha';
+    document.getElementById('albumAnnee').value  = p0.annee || '';
+    document.getElementById('albumGenre').value  = p0.genre || '';
+
+    // Sélectionner le bon type
+    const type = p0.type || 'album';
+    document.querySelectorAll('.type-btn').forEach(b => {
+      const actif = b.dataset.type === type;
+      b.classList.toggle('active', actif);
+      b.querySelector('input').checked = actif;
+    });
+    const cfg = TYPE_CONFIG[type] || TYPE_CONFIG.album;
+    document.getElementById('labelNom').textContent    = cfg.nom;
+    document.getElementById('typeHint').textContent    = cfg.hint;
+    document.getElementById('btnSaveLabel').textContent = `Mettre à jour le ${cfg.label}`;
+
+    // Ajouter les pistes dans la tracklist
+    for (const p of pistes) {
+      tracklist.push({
+        nom:       p.nom,
+        titre:     p.titre || p.nom.replace('.mp3',''),
+        artiste:   p.artiste || 'Jocha',
+        annee:     p.annee || '',
+        genre:     p.genre || '',
+        cover_url: p.cover_url || `/api/fichiers/${encodeURIComponent(p.nom)}/cover`,
+      });
+    }
+
+    renderTracklist();
+    renderMp3(tousLesMp3.filter(f =>
+      f.titre.toLowerCase().includes(document.getElementById('searchMp3').value.toLowerCase())
+    ));
+    mettreAJourBouton();
+    document.getElementById('headerTitle').textContent = `Modifier · ${nomAlbum}`;
+    document.getElementById('btnSaveLabel').textContent = `Mettre à jour l'album`;
+    document.getElementById('colAlbumTitle').textContent = 'Modifier la sortie';
+    toast(`« ${nomAlbum} » chargé — ${pistes.length} piste(s)`, 'success');
+  } catch(e) {
+    toast('Erreur : ' + e.message, 'error');
+  }
+}
+
 // ── INIT ───────────────────────────────────────────────────────────────────
 
-chargerMp3();
+// Chargement auto si ?album= dans l'URL
+(async () => {
+  await chargerMp3();
+  const params = new URLSearchParams(location.search);
+  if (params.has('album')) chargerAlbum(params.get('album'));
+})();
 </script>
 </body>
 </html>

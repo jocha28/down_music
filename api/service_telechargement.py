@@ -143,24 +143,23 @@ async def _executer_telechargement(tache_id: str, son: Son, token: str):
     tache = _taches[tache_id]
     DOSSIER_MUSIQUES.mkdir(parents=True, exist_ok=True)
 
-    # Détecter le nom de fichier disponible (gère les doublons de titres)
-    nom_base = _nom_propre(son.titre)
-    chemin_base = DOSSIER_MUSIQUES / nom_base
-
     # Vérifier si ce son a été supprimé manuellement → ne pas re-télécharger
+    nom_base = _nom_propre(son.titre)
     if _est_supprime(nom_base):
         tache.statut      = StatutTelecharge.DEJA_PRESENT
         tache.progression = 100.0
         tache.erreur      = "supprimé"
         return
 
-    if chemin_base.exists():
+    # Nom unique (gère les doublons de titres, ex: "Empire Digital (2).mp3")
+    chemin_mp3 = DOSSIER_MUSIQUES / _nom_propre(son.titre, dossier=DOSSIER_MUSIQUES)
+
+    # DEJA_PRESENT uniquement si le fichier avec ce nom exact existe déjà
+    if chemin_mp3.exists():
         tache.statut         = StatutTelecharge.DEJA_PRESENT
         tache.progression    = 100.0
-        tache.chemin_fichier = str(chemin_base)
+        tache.chemin_fichier = str(chemin_mp3)
         return
-    # Nom unique même si un autre téléchargement concurrent a le même titre
-    chemin_mp3 = DOSSIER_MUSIQUES / _nom_propre(son.titre, dossier=DOSSIER_MUSIQUES)
 
     tache.statut = StatutTelecharge.EN_COURS
 
