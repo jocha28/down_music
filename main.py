@@ -69,6 +69,15 @@ async def duree_de_vie(app: FastAPI):
     app.state.token         = config.get("token", "")
     app.state.refresh_token = config.get("refresh_token", "")
 
+    # Nettoyer les fichiers revenus malgré la liste noire
+    try:
+        from api.routes import nettoyer_suppressions as _nettoyer
+        resultat = await _nettoyer()
+        if resultat["supprimés"]:
+            print(f"  🧹 {len(resultat['supprimés'])} fichier(s) supprimés (liste noire) : {', '.join(resultat['supprimés'])}")
+    except Exception as e:
+        print(f"  Nettoyage liste noire : {e}")
+
     if app.state.token:
         # Vérifier l'expiration du token
         try:

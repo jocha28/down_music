@@ -85,6 +85,7 @@
   .song-cover img { width: 100%; height: 100%; object-fit: cover; }
   .song-name { font-size: .9375rem; font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .song-sub { font-size: .78rem; color: var(--text2); margin-top: 2px; }
+  .plays-count { font-size: .82rem; color: var(--text2); font-variant-numeric: tabular-nums; white-space: nowrap; min-width: 80px; text-align: right; margin-right: 8px; }
   .song-right { display: flex; align-items: center; gap: 14px; }
   .like-btn { background: none; border: none; cursor: pointer; color: var(--text3); opacity: 0; transition: opacity .15s, color .15s; padding: 3px; }
   .song-row:hover .like-btn { opacity: 1; }
@@ -823,27 +824,53 @@ function render() {
 
 // ── POPULAIRES ──────────────────────────────────────────────────────────────
 
-function renderPopular(liste) {
-  liste = liste ?? sons.slice(0, shown);
+function _getPlays(nom) { return parseInt(localStorage.getItem('plays_' + nom) || '0', 10); }
+function _fmtPlays(n) { if (n === 0) return '—'; return n.toLocaleString('fr-FR'); }
+
+function renderPopular(forceList) {
+  // Tri par plays décroissant sur toute la liste
+  const sorted = [...sons]
+    .map(s => ({ ...s, _origIdx: sons.indexOf(s), _plays: _getPlays(s.nom) }))
+    .sort((a, b) => b._plays - a._plays);
+
+  // Min 5, max 10 : on prend jusqu'à 10, mais au moins 5 (même avec 0 plays)
+  let liste;
+  if (forceList) {
+    liste = forceList;
+  } else {
+    const avecPlays = sorted.filter(s => s._plays > 0);
+    const nb = Math.min(10, Math.max(5, avecPlays.length));
+    liste = sorted.slice(0, nb);
+  }
+
   const el = document.getElementById('popularList');
-  el.innerHTML = liste.map((s, i) => `
-    <div class="song-row${playIdx === i ? ' playing' : ''}" data-i="${i}">
+  el.innerHTML = liste.map((s, i) => {
+    const origIdx = s._origIdx ?? sons.indexOf(s);
+    const plays   = s._plays ?? _getPlays(s.nom);
+    return `
+    <div class="song-row${playIdx === origIdx ? ' playing' : ''}" data-i="${origIdx}">
       <div class="num">${i+1}</div>
-      <div class="play-icon" onclick="play(${i})"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg></div>
+      <div class="play-icon" onclick="play(${origIdx})"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg></div>
       <div class="song-cover">${s.cover_url ? `<img src="${s.cover_url}" onerror="this.parentElement.innerHTML='🎵'" loading="lazy" alt="">` : '🎵'}</div>
-      <div ondblclick="play(${i})" style="min-width:0">
+      <div ondblclick="play(${origIdx})" style="min-width:0">
         <div class="song-name">${s.titre}</div>
         <div class="song-sub">${s.album || ''}</div>
       </div>
+      <span class="plays-count">${_fmtPlays(plays)}</span>
       <div class="song-right">
         <button class="like-btn" onclick="this.classList.toggle('on')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button>
         <span class="duration">${dur(s.duree)}</span>
       </div>
-    </div>`).join('');
-  document.getElementById('voirPlusBtn').style.display = sons.length > shown ? '' : 'none';
+    </div>`;
+  }).join('');
+
+  // Bouton "Voir tout" si plus de 10 sons ont des plays
+  const avecPlays = sorted.filter(s => s._plays > 0);
+  document.getElementById('voirPlusBtn').style.display =
+    !forceList && avecPlays.length > 10 ? '' : 'none';
 }
 
-function voirTout() { shown = sons.length; renderPopular(); }
+function voirTout() { renderPopular([...sons].map(s => ({ ...s, _origIdx: sons.indexOf(s), _plays: _getPlays(s.nom) })).sort((a,b) => b._plays - a._plays)); }
 
 // ── DISCOGRAPHIE ─────────────────────────────────────────────────────────────
 
@@ -855,14 +882,24 @@ function filtrerDisco(f, btn) {
   renderDisco(f);
 }
 
+function _albumPlays(a) {
+  // Somme des plays de toutes les pistes de l'album
+  return sons
+    .filter(s => s.album === a.titre)
+    .reduce((acc, s) => acc + _getPlays(s.nom), 0);
+}
+
 function renderDisco(filtre) {
   const albums = data.albums;
   const grid   = document.getElementById('discoGrid');
   const noAlb  = document.getElementById('noAlbums');
 
-  let filtres = albums;
-  if (filtre === 'album')  filtres = albums.filter(a => (a.type||'album') === 'album');
-  if (filtre === 'ep')     filtres = albums.filter(a => ['ep','single'].includes(a.type||'album'));
+  let filtres = [...albums];
+  if (filtre === 'album')  filtres = filtres.filter(a => (a.type||'album') === 'album');
+  if (filtre === 'ep')     filtres = filtres.filter(a => ['ep','single'].includes(a.type||'album'));
+
+  // "Sorties populaires" : trier par plays décroissant
+  if (filtre === 'tout') filtres.sort((a, b) => _albumPlays(b) - _albumPlays(a));
 
   if (!filtres.length) { grid.innerHTML = ''; noAlb.style.display = ''; return; }
   noAlb.style.display = 'none';
@@ -961,6 +998,8 @@ const audio = document.getElementById('audio');
 
 function play(i) {
   const s = sons[i]; if (!s) return;
+  // Incrémenter le compteur de lectures
+  localStorage.setItem('plays_' + s.nom, _getPlays(s.nom) + 1);
   if (IN_SHELL) {
     playIdx = i;
     window.parent.gJouer(sons, i, profilInfo);

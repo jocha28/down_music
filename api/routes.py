@@ -714,16 +714,25 @@ async def obtenir_lyrics(nom_fichier: str):
 @router.post(
     "/tags/synchroniser",
     tags=["Fichiers"],
-    summary="Synchroniser genre/année depuis Sonauto pour tous les MP3 existants",
+    summary="Resync complet : artiste, genre, année, type, paroles synchronisées",
 )
 async def synchroniser_tags(request: Request):
     """
-    Récupère tous les sons likés depuis Sonauto, fait correspondre
-    les MP3 locaux par titre, et écrit genre (TCON) + année (TDRC)
-    dans ceux qui n'ont pas encore ces tags.
+    Pour chaque MP3 local correspondant à un son liké Sonauto :
+    - Artiste (TPE1) si absent
+    - Genre (TCON) si absent
+    - Année (TDRC) si absente
+    - Type sortie (TXXX:type_sortie) si absent → 'single' par défaut sauf si TALB présent
+    - Paroles non-sync (USLT) si absentes
+    - Paroles synchronisées (SYLT) si absentes
+    - Fichier .lrc si absent
     """
-    import re as _re
-    from mutagen.id3 import ID3, TCON, TDRC, ID3NoHeaderError, Encoding
+    import re as _re, asyncio as _aio
+    from mutagen.id3 import (
+        ID3, ID3NoHeaderError, Encoding,
+        TIT2, TPE1, TCON, TDRC, USLT, SYLT, TXXX,
+    )
+    from .service_telechargement import _generer_lrc, _generer_sylt
 
     token = await _token_ou_rafraichi(request)
     async with ClientSonauto(token) as client:
@@ -731,25 +740,17 @@ async def synchroniser_tags(request: Request):
 
     if not sons:
         raise HTTPException(status_code=404, detail="Aucun son liké trouvé")
-
     if not DOSSIER_MUSIQUES.exists():
         raise HTTPException(status_code=404, detail="Dossier musiques introuvable")
 
-    # Index titre → son (titre normalisé pour la comparaison)
-    def _normaliser(s: str) -> str:
+    def _nrm(s: str) -> str:
         return _re.sub(r'[^a-z0-9]', '', s.lower())
 
-    index_sons = {_normaliser(s.titre): s for s in sons}
+    index_sons = {_nrm(s.titre): s for s in sons}
+    resultats  = {"mis_a_jour": [], "deja_ok": [], "non_trouve": [], "erreurs": []}
 
-    resultats = {"mis_a_jour": [], "deja_tags": [], "non_trouve": [], "erreurs": []}
-
-    # Pour chaque MP3 local
-    mp3s = sorted(DOSSIER_MUSIQUES.glob("*.mp3"))
-    for mp3 in mp3s:
-        titre_fichier = mp3.stem  # ex: "Active"
-        cle = _normaliser(titre_fichier)
-        son = index_sons.get(cle)
-
+    for mp3 in sorted(DOSSIER_MUSIQUES.glob("*.mp3")):
+        son = index_sons.get(_nrm(mp3.stem))
         if not son:
             resultats["non_trouve"].append(mp3.name)
             continue
@@ -760,48 +761,106 @@ async def synchroniser_tags(request: Request):
             except ID3NoHeaderError:
                 tags = ID3()
 
-            frame_genre = tags.get("TCON")
-            frame_annee = tags.get("TDRC")
-            genre_actuel = str(frame_genre.text[0]) if frame_genre and hasattr(frame_genre, "text") and frame_genre.text else ""
-            annee_actuelle = str(frame_annee.text[0]) if frame_annee and hasattr(frame_annee, "text") and frame_annee.text else ""
+            def _txt(tid):
+                f = tags.get(tid)
+                return str(f.text[0]).strip() if f and getattr(f, "text", None) else ""
 
-            if genre_actuel and annee_actuelle:
-                resultats["deja_tags"].append(mp3.name)
+            artiste_actuel  = _txt("TPE1")
+            genre_actuel    = _txt("TCON")
+            annee_actuelle  = _txt("TDRC")
+            type_actuel     = _txt("TXXX:type_sortie")
+            album_actuel    = _txt("TALB")
+            a_uslt = bool(tags.get("USLT::fra") or tags.get("USLT"))
+            a_sylt = bool(tags.get("SYLT::fra") or tags.get("SYLT"))
+
+            besoin = (
+                not artiste_actuel or not genre_actuel or not annee_actuelle
+                or not type_actuel or not a_uslt or not a_sylt
+            )
+            if not besoin:
+                resultats["deja_ok"].append(mp3.name)
                 continue
 
-            # Récupérer le genre depuis Sonauto
+            # Appels Sonauto nécessaires
             track_params_id = son.donnees_brutes.get("track_params_id") or ""
-            annee = (son.donnees_brutes.get("created_at") or "")[:4]
+            lyrics_id       = son.donnees_brutes.get("lyrics_id") or ""
+            annee           = (son.donnees_brutes.get("created_at") or "")[:4]
 
             async with ClientSonauto(token) as client:
-                tags_son = await client.obtenir_tags(track_params_id)
-
-            genre = ", ".join(tags_son) if tags_son else ""
+                tags_son, donnees_lyrics = await _aio.gather(
+                    client.obtenir_tags(track_params_id) if not genre_actuel else _aio.sleep(0, result=[]),
+                    client.obtenir_lyrics(lyrics_id)    if (not a_uslt or not a_sylt) else _aio.sleep(0, result=None),
+                )
 
             modifie = False
+
+            # Artiste
+            if not artiste_actuel:
+                tags["TPE1"] = TPE1(encoding=Encoding.UTF8, text="Jocha")
+                modifie = True
+
+            # Genre
+            genre = ", ".join(tags_son) if tags_son else ""
             if genre and not genre_actuel:
                 tags["TCON"] = TCON(encoding=Encoding.UTF8, text=[genre])
                 modifie = True
+
+            # Année
             if annee and not annee_actuelle:
                 tags["TDRC"] = TDRC(encoding=Encoding.UTF8, text=[annee])
                 modifie = True
 
+            # Type sortie
+            if not type_actuel:
+                t = "album" if album_actuel else "single"
+                tags["TXXX:type_sortie"] = TXXX(encoding=Encoding.UTF8,
+                                                  desc="type_sortie", text=[t])
+                modifie = True
+
+            # Paroles
+            if donnees_lyrics:
+                brut    = donnees_lyrics.get("lyrics") or ""
+                aligned = donnees_lyrics.get("aligned_lyrics") or []
+                wals    = donnees_lyrics.get("word_aligned_lyrics") or []
+
+                if brut and not a_uslt:
+                    tags["USLT::fra"] = USLT(encoding=Encoding.UTF8, lang="fra", desc="", text=brut)
+                    modifie = True
+
+                sylt_data = _generer_sylt(wals) if wals else []
+                if not sylt_data and aligned:
+                    sylt_data = [(item.get("text",""), int(float(item.get("start",0))*1000))
+                                 for item in aligned if isinstance(item, dict)]
+                if sylt_data and not a_sylt:
+                    tags["SYLT::fra"] = SYLT(encoding=Encoding.UTF8, lang="fra",
+                                              format=2, type=1, desc="sync", text=sylt_data)
+                    modifie = True
+
+                # Fichier .lrc
+                lrc_path = mp3.with_suffix(".lrc")
+                if not lrc_path.exists() and aligned:
+                    lrc = _generer_lrc(aligned)
+                    if lrc:
+                        lrc_path.write_text(lrc, encoding="utf-8")
+
             if modifie:
                 tags.save(str(mp3))
-                resultats["mis_a_jour"].append({"fichier": mp3.name, "genre": genre, "annee": annee})
+                resultats["mis_a_jour"].append(mp3.name)
             else:
-                resultats["deja_tags"].append(mp3.name)
+                resultats["deja_ok"].append(mp3.name)
 
         except Exception as e:
             resultats["erreurs"].append({"fichier": mp3.name, "erreur": str(e)})
 
+        await _aio.sleep(0.2)   # politesse
+
     return {
-        "total_mp3": len(mp3s),
+        "total_mp3":  len(list(DOSSIER_MUSIQUES.glob("*.mp3"))),
         "mis_a_jour": len(resultats["mis_a_jour"]),
-        "deja_tags": len(resultats["deja_tags"]),
+        "deja_ok":    len(resultats["deja_ok"]),
         "non_trouve": len(resultats["non_trouve"]),
-        "erreurs": len(resultats["erreurs"]),
-        "details": resultats,
+        "erreurs":    len(resultats["erreurs"]),
+        "details":    resultats,
     }
 
 
@@ -984,6 +1043,51 @@ async def ecrire_tags(
     return {"message": "Tags enregistrés avec succès"}
 
 
+@router.post(
+    "/suppressions/nettoyer",
+    tags=["Fichiers"],
+    summary="Supprimer du disque les fichiers qui sont dans la liste noire",
+)
+async def nettoyer_suppressions():
+    import json as _j, unicodedata as _ud
+    fichier_supp = Path("data/suppressions.json")
+    if not fichier_supp.exists():
+        return {"supprimés": []}
+    try:
+        noms = _j.loads(fichier_supp.read_text(encoding="utf-8"))
+    except Exception:
+        return {"supprimés": []}
+
+    supprimes = []
+    for nom in noms:
+        chemin = DOSSIER_MUSIQUES / nom
+        if chemin.exists() and chemin.is_file():
+            chemin.unlink()
+            lrc = chemin.with_suffix(".lrc")
+            if lrc.exists():
+                lrc.unlink()
+            supprimes.append(nom)
+    return {"supprimés": supprimes}
+
+
+@router.get(
+    "/suppressions",
+    tags=["Fichiers"],
+    summary="Liste des titres supprimés (ne pas re-télécharger)",
+)
+async def lister_suppressions():
+    import json as _j, unicodedata as _ud
+    fichier = Path("data/suppressions.json")
+    if not fichier.exists():
+        return []
+    try:
+        noms = _j.loads(fichier.read_text(encoding="utf-8"))
+        # Retourner les titres (sans .mp3) pour comparaison côté frontend
+        return [_ud.normalize("NFC", n).strip().removesuffix(".mp3") for n in noms]
+    except Exception:
+        return []
+
+
 @router.delete(
     "/fichiers/{nom_fichier}",
     tags=["Fichiers"],
@@ -1006,12 +1110,13 @@ async def supprimer_fichier(nom_fichier: str):
 
 
 def _noter_suppression(nom_fichier: str) -> None:
-    import json as _json
+    import json as _json, unicodedata as _ud
     fichier = Path("data/suppressions.json")
     fichier.parent.mkdir(parents=True, exist_ok=True)
+    nom_nfc = _ud.normalize("NFC", nom_fichier).strip()
     try:
-        suppressions: set = set(_json.loads(fichier.read_text(encoding="utf-8"))) if fichier.exists() else set()
+        suppressions: set = {_ud.normalize("NFC", n).strip() for n in _json.loads(fichier.read_text(encoding="utf-8"))} if fichier.exists() else set()
     except Exception:
         suppressions = set()
-    suppressions.add(nom_fichier)
+    suppressions.add(nom_nfc)
     fichier.write_text(_json.dumps(sorted(suppressions), ensure_ascii=False, indent=2), encoding="utf-8")

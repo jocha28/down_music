@@ -465,6 +465,7 @@
 const API = '';   // même origine
 let sons = [];
 let fichiersTelecharges = new Set();
+let sonsSupprimés = new Set();  // titres supprimés à ne pas re-télécharger
 let tachesActives = {};
 let intervalleTaches = null;
 
@@ -549,7 +550,10 @@ async function chargerSons() {
   const el = document.getElementById('sonsList');
   el.innerHTML = '<div class="empty"><div class="spin">⟳</div> Chargement…</div>';
   try {
-    sons = await api('GET', '/sons');
+    [sons] = await Promise.all([
+      api('GET', '/sons'),
+      api('GET', '/suppressions').then(list => { sonsSupprimés = new Set(list); }).catch(() => {}),
+    ]);
     document.getElementById('statSons').textContent = sons.length;
     document.getElementById('btnToutDl').style.display = '';
     renderSons();
@@ -565,7 +569,7 @@ function filtrerSons() {
 }
 
 function renderSons(liste) {
-  liste = liste || sons;
+  liste = (liste || sons).filter(s => !sonsSupprimés.has(s.titre));
   const el = document.getElementById('sonsList');
   const nonDl = liste.filter(s => !fichiersTelecharges.has(s.titre));
   document.getElementById('btnToutCount').textContent = nonDl.length;

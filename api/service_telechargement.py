@@ -25,19 +25,25 @@ FICHIER_SUPPRESSIONS = Path("data/suppressions.json")
 
 # ── Liste noire des sons supprimés ───────────────────────────────────────────
 
+import unicodedata as _udata
+
+def _nfc(s: str) -> str:
+    """Normalise en NFC et supprime les espaces superflus."""
+    return _udata.normalize("NFC", s).strip()
+
 def _charger_suppressions() -> set[str]:
-    """Retourne l'ensemble des noms de fichiers supprimés manuellement."""
+    """Retourne l'ensemble des noms de fichiers supprimés (normalisés NFC)."""
     import json
     if not FICHIER_SUPPRESSIONS.exists():
         return set()
     try:
-        return set(json.loads(FICHIER_SUPPRESSIONS.read_text(encoding="utf-8")))
+        return {_nfc(n) for n in json.loads(FICHIER_SUPPRESSIONS.read_text(encoding="utf-8"))}
     except Exception:
         return set()
 
 def _est_supprime(nom_fichier: str) -> bool:
     """Vérifie si un nom de fichier MP3 a été supprimé manuellement."""
-    return nom_fichier in _charger_suppressions()
+    return _nfc(nom_fichier) in _charger_suppressions()
 
 
 # ── Dictionnaire global des tâches ────────────────────────────────────────────
